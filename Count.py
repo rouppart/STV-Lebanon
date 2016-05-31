@@ -8,7 +8,7 @@ winners = losers = 0;
 
 ol = [];
 
-
+relseats = dict();
 def add(args):
     global areaname, seats;
     s = args.split(',');
