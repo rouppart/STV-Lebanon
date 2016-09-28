@@ -47,9 +47,10 @@ def print_status():
     print(nameformat.format('Total Waste')+' ', voteformat.format(stv.totalwaste))
 
     if viewvoter in stv.voters.keys():
+        vlstatus = {-1: 'Lost', 0: 'Open', 2: 'Partial', 3: 'Full'}
         print('\n'+stv.voters[viewvoter].uid, 'list:')
-        for v in stv.voters[viewvoter].votelinks:
-            print(nameformat.format(v.candidate.name), ratioformat.format(v.weight))
+        for vl in stv.voters[viewvoter].votelinks:
+            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+vlstatus[vl.status])
         print(nameformat.format('Waste'), ratioformat.format(stv.voters[viewvoter].waste))
     print()
 
@@ -61,9 +62,8 @@ laststatus = stv.next_round()
 while laststatus.continuepossible:
     if viewmode == 'r':
         input('Press any key to continue to next round...')
-    print('Round:', stv.rounds)
-    print('Quota:', voteformat.format(stv.quota)) if stv.adaptivequota else None
-    print()
+    print('Round:', stv.rounds, '\n')
+
     resulttranslate = {1: 'Won', 0: 'been returned to the active list.', -1: 'Lost'}
     print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
 
@@ -72,7 +72,7 @@ while laststatus.continuepossible:
         for c in laststatus.deleted_by_group:
             print(c.name, )
         print()
-
+    print('Next Quota:', voteformat.format(stv.quota), '\n') if stv.adaptivequota else None
     print_status()
     print('---------------------------\n')
     laststatus = stv.next_round()
