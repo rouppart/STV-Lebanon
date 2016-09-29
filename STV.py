@@ -1,16 +1,15 @@
-LOST = -1
-OPEN = 0
-ALLOCATE = 1
-PARTIAL = 2
-FULL = 3
+LOST = -1  # lost support
+OPEN = 0  # open support
+NEW = 1  # new support
+PARTIAL = 2  # partial support
+FULL = 3  # full support
 
 
 # Area
 class STV:
-    def __init__(self, areanamep, usegroupsp=False, adaptivequotap=False):
+    def __init__(self, areanamep, usegroupsp=False):
         self.areaname = areanamep
         self.usegroups = usegroupsp
-        self.adaptivequota = adaptivequotap
 
         self.quota = 0
         self.totalseats = 0
@@ -41,7 +40,7 @@ class STV:
 
     def _sort_by_vote(self):
         for c in self.candidates.values():
-            c.refresh_votes()
+            c.sum_votes()
 
         act = self.active
         end = len(act)
@@ -62,7 +61,7 @@ class STV:
             v.allocate_votes()
         self._sort_by_vote()
 
-    def update_waste(self):
+    def sum_waste(self):
         self.totalwaste = 0
         for v in self.voters.values():
             self.totalwaste += v.waste
@@ -89,16 +88,18 @@ class STV:
             else:
                 status.message = 'Repechage failed'
         else:  # continue elimination
-            roundwinner = self.active[0]
+            topcandidate = self.active[0]
 
-            if roundwinner.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:  # fixitlater
+            if topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:  # fixitlater
+                roundwinner = topcandidate
                 status.candidate = roundwinner
                 status.result = 1
 
-                self.winners.append(self.active.pop(0))
+                self.active.remove(roundwinner)
+                self.winners.append(roundwinner)
 
                 roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
-                roundwinner.update_votelinks(ALLOCATE)
+                roundwinner.update_votelinks(NEW)
 
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
@@ -106,15 +107,19 @@ class STV:
                     for c in self.active:
                         if c.group == wgroup:
                             grouploser = c
-                            self.active.remove(c)
                             status.deleted_by_group.append(grouploser)
+
+                            self.active.remove(c)
                             self.losers.append(grouploser)
+
                             grouploser.update_votelinks(LOST)
             else:
                 roundloser = self.active.pop()
                 status.candidate = roundloser
                 status.result = -1
+
                 self.losers.append(roundloser)
+
                 roundloser.update_votelinks(LOST)
 
             # General Redistribution of votes
@@ -128,15 +133,10 @@ class STV:
                         vl.voter.allocate_votes()
 
             status.continuepossible = True
+
         self._sort_by_vote()
         self.rounds += 1
-        self.update_waste()
-
-        if self.adaptivequota and self.totalseats - len(self.winners) != 0:
-            totalactivevotes = 0
-            for ca in self.active:
-                totalactivevotes += ca.votes
-            self.quota = totalactivevotes / (self.totalseats - len(self.winners))
+        self.sum_waste()
 
         return status
 
@@ -184,7 +184,7 @@ class _Candidate:
     def add_vote_link(self, votelinkp):
         self.votelinks.append(votelinkp)
 
-    def refresh_votes(self):
+    def sum_votes(self):
         self.votes = 0
         for l in self.votelinks:
             self.votes += l.weight
@@ -199,11 +199,11 @@ class _Candidate:
 
     def reduce(self):
         self.doreduce = False
-        votersallocated = 0
+        supportingvoters = 0
         for vl in self.votelinks:  # count voters and set allocate to partial
             if vl.status > OPEN:
-                votersallocated += 1
-                if vl.status == ALLOCATE:
+                supportingvoters += 1
+                if vl.status == NEW:
                     vl.update_status(PARTIAL)
 
         partialvls = []
@@ -217,13 +217,13 @@ class _Candidate:
                 partialvls.insert(i, vl)
 
         i = 0
-        partialtotweight = 0
-        fullfraction = self.wonatquota / votersallocated
-        while i < len(partialvls) and fullfraction > partialvls[i].weight:  # calculate new full support fraction
-            partialtotweight += partialvls[i].weight
+        totalpartialweight = 0
+        fullsupportfraction = self.wonatquota / supportingvoters
+        while i < len(partialvls) and fullsupportfraction > partialvls[i].weight:  # calculate new full support fraction
+            totalpartialweight += partialvls[i].weight
             i += 1
-            if votersallocated - i > 0:
-                fullfraction = (self.wonatquota - partialtotweight) / (votersallocated - i)
+            if supportingvoters - i > 0:
+                fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
 
         while i < len(partialvls):  # fix status of partials who can now support fully
             partialvls[i].update_status(FULL)
@@ -231,7 +231,7 @@ class _Candidate:
 
         for vl in self.votelinks:  # reduce full support
             if vl.status == FULL:
-                vl.weight = fullfraction
+                vl.weight = fullsupportfraction
 
 
 # Voter
@@ -254,13 +254,14 @@ class _Voter:
                 total -= vl.weight
 
         for vl in self.votelinks:
-            if vl.status in [OPEN, ALLOCATE]:
+            if vl.status in [OPEN, NEW]:
                 vl.weight = total
                 total = 0
 
                 if vl.weight > 0 and vl.candidate.wonatquota > 0:
-                    vl.update_status(ALLOCATE)
+                    vl.update_status(NEW)
                     vl.candidate.doreduce = True
+
         self.waste = total
 
 

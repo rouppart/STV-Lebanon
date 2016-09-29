@@ -4,7 +4,7 @@ from STV import STV
 
 f = open('Area.csv', 'r')
 areaname, groups = f.readline().strip().split(',')
-stv = STV(areaname, True, False)
+stv = STV(areaname, True)
 for group in groups.split(';'):
     groupname, seats = group.split(':')
     stv.add_group(groupname, int(seats))
@@ -40,9 +40,9 @@ print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len
 def print_status():
     statcands = [('W', stv.winners), ('A', stv.active), ('L', stv.losers[::-1])]
 
-    for status, cs in statcands:
-        for c in cs:
-            print(nameformat.format(c.name)+status, voteformat.format(c.votes))
+    for status, candidates in statcands:
+        for candidate in candidates:
+            print(nameformat.format(candidate.name)+status, voteformat.format(candidate.votes))
     print('------------')
     print(nameformat.format('Total Waste')+' ', voteformat.format(stv.totalwaste))
 
@@ -72,7 +72,6 @@ while laststatus.continuepossible:
         for c in laststatus.deleted_by_group:
             print(c.name, )
         print()
-    print('Next Quota:', voteformat.format(stv.quota), '\n') if stv.adaptivequota else None
     print_status()
     print('---------------------------\n')
     laststatus = stv.next_round()
