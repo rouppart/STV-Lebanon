@@ -1,8 +1,7 @@
 LOST = -1  # lost support
 OPEN = 0  # open support
-NEW = 1  # new support
-PARTIAL = 2  # partial support
-FULL = 3  # full support
+PARTIAL = 1  # partial support
+FULL = 2  # full support
 
 
 # Area
@@ -90,7 +89,7 @@ class STV:
         else:  # continue elimination
             topcandidate = self.active[0]
 
-            if topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:  # fixitlater
+            if topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
                 roundwinner = topcandidate
                 status.candidate = roundwinner
                 status.result = 1
@@ -99,7 +98,7 @@ class STV:
                 self.winners.append(roundwinner)
 
                 roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
-                roundwinner.update_votelinks(NEW)
+                roundwinner.update_votelinks(PARTIAL)
 
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
@@ -203,8 +202,6 @@ class _Candidate:
         for vl in self.votelinks:  # count voters and set allocate to partial
             if vl.status > OPEN:
                 supportingvoters += 1
-                if vl.status == NEW:
-                    vl.update_status(PARTIAL)
 
         partialvls = []
         for vl in self.votelinks:  # create ordered list of partial votelinks
@@ -254,12 +251,12 @@ class _Voter:
                 total -= vl.weight
 
         for vl in self.votelinks:
-            if vl.status in [OPEN, NEW]:
+            if vl.status == OPEN:
                 vl.weight = total
                 total = 0
 
                 if vl.weight > 0 and vl.candidate.wonatquota > 0:
-                    vl.update_status(NEW)
+                    vl.update_status(PARTIAL)
                     vl.candidate.doreduce = True
 
         self.waste = total
