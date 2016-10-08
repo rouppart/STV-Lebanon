@@ -23,6 +23,8 @@ class STV:
         self.active = []
         self.losers = []
 
+        self.doreactivate = False
+
     def add_group(self, namep, seatsp):
         newgroup = _Group(namep, seatsp)
         self.groups[newgroup.pk()] = newgroup
@@ -45,7 +47,7 @@ class STV:
         for v in self.voters.values():
             self.totalwaste += v.waste
 
-        self.active.sort(key=lambda c: c.votes, reverse=True)
+        self.active.sort(key=lambda candidate: candidate.votes, reverse=True)
 
     def prepare_for_count(self):
         for c in self.candidates.values():
@@ -56,7 +58,7 @@ class STV:
             v.allocate_votes()
         self._sort_by_vote()
 
-    def process_candidate(self, candidate, newstatus):
+    def _process_candidate(self, candidate, newstatus):
         if newstatus == LOST:
             self.active.remove(candidate)
             self.losers.append(candidate)
@@ -71,30 +73,41 @@ class STV:
 
     def next_round(self):
         status = STVStatus()
-        if len(self.winners) == self.totalseats:  # finish
+
+        # finish
+        if len(self.winners) == self.totalseats:
             status.finished = True
-        elif len(self.winners) + len(self.active) < self.totalseats:  # reactivation
-            roundreturned = None
+
+        # reactivation
+        elif not self.nolosers and len(self.winners) + len(self.active) < self.totalseats\
+                or self.nolosers and len(self.active) == 0\
+                or self.doreactivate:
+            self.doreactivate = False
+            status.result = 0
             for c in self.losers[::-1]:
-                if not c.group.is_full():
-                    roundreturned = c
-                    break
+                if not self.usegroups or not c.group.is_full():
+                    self._process_candidate(c, OPEN)
 
-            if roundreturned is not None:
-                self.process_candidate(roundreturned, OPEN)
+                    status.continuepossible = True
+                    status.reactivated.append(c)
 
-                status.candidate = roundreturned
-                status.result = 0
-                status.continuepossible = True
-            else:
-                status.message = 'Repechage failed'
-        else:  # elimination
+                    if not self.nolosers:
+                        break
+
+            if not status.continuepossible:
+                status.message = 'Reactivation failed'
+
+        # elimination
+        else:
             topcandidate = self.active[0]
+
             # Win
-            if topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
+            if topcandidate.votes >= self.quota \
+                    or not self.nolosers and len(self.winners) + len(self.active) == self.totalseats \
+                    or self.nolosers and len(self.active) == 1:
                 roundwinner = topcandidate
                 roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
-                self.process_candidate(roundwinner, PARTIAL)
+                self._process_candidate(roundwinner, PARTIAL)
 
                 status.candidate = roundwinner
                 status.result = 1
@@ -104,14 +117,16 @@ class STV:
                 if self.usegroups and wgroup.is_full():
                     for c in self.active:
                         if c.group == wgroup:
-                            self.process_candidate(c, LOST)
+                            self._process_candidate(c, LOST)
 
                             status.deleted_by_group.append(c)
+                if self.nolosers and self.losers:
+                    self.doreactivate = True
 
             # Lose
             else:
                 roundloser = self.active[-1]
-                self.process_candidate(roundloser, LOST)
+                self._process_candidate(roundloser, LOST)
 
                 status.candidate = roundloser
                 status.result = -1
@@ -130,7 +145,7 @@ class STV:
                 if winner.doreduce:
                     winner.reduce()
                     for vl in winner.votelinks:
-                        vl.voter.doallocate = True  # allocate_votes()
+                        vl.voter.doallocate = True
 
         self._sort_by_vote()
         self.rounds += 1
@@ -144,6 +159,7 @@ class STVStatus:
         self.candidate = None
         self.result = None
         self.deleted_by_group = []
+        self.reactivated = []
         self.message = ''
         self.continuepossible = False
         self.finished = False
@@ -192,7 +208,7 @@ class _Candidate:
             vl.update_status(newstatus)
 
         for vl in self.votelinks:
-            vl.voter.doallocate = True  # allocate_votes()
+            vl.voter.doallocate = True
 
     def reduce(self):
         self.doreduce = False

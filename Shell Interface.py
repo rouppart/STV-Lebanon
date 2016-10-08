@@ -4,7 +4,7 @@ from STV import STV
 
 f = open('Area.csv', 'r')
 areaname, groups = f.readline().strip().split(',')
-stv = STV(areaname, True)
+stv = STV(areaname, True, True)
 for group in groups.split(';'):
     groupname, seats = group.split(':')
     stv.add_group(groupname, int(seats))
@@ -64,20 +64,26 @@ while laststatus.continuepossible:
         input('Press any key to continue to next round...')
     print('Round:', stv.rounds, '\n')
 
-    resulttranslate = {1: 'Won', 0: 'been returned to the active list.', -1: 'Lost'}
-    print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
+    if laststatus.result != 0:
+        resulttranslate = {1: 'Won', -1: 'Lost'}
+        print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
+    else:
+        print('The following candidates have been returned to the active list:')
+        for c in laststatus.reactivated:
+            print(c.name)
+        print()
 
     if laststatus.deleted_by_group:
         print('The following candidates lost because their group quota has been met:')
         for c in laststatus.deleted_by_group:
-            print(c.name, )
+            print(c.name)
         print()
     print_status()
     print('---------------------------\n')
     laststatus = stv.next_round()
 
 
-print('Votes finished' if laststatus.finished else laststatus.message)
+print('Votes finished' if laststatus.finished else ('Error: '+laststatus.message))
 
 for group in stv.groups.values():
     print(group.name, group.seatswon, '/', group.seats)
