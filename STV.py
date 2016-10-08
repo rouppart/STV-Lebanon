@@ -6,9 +6,10 @@ FULL = 2  # full support
 
 # Area
 class STV:
-    def __init__(self, areanamep, usegroupsp=False):
+    def __init__(self, areanamep, usegroupsp=False, nolosersp=False):
         self.areaname = areanamep
         self.usegroups = usegroupsp
+        self.nolosers = nolosersp
 
         self.quota = 0
         self.totalseats = 0
@@ -18,8 +19,8 @@ class STV:
         self.candidates = dict()
         self.voters = dict()
 
-        self.active = []
         self.winners = []
+        self.active = []
         self.losers = []
 
     def add_group(self, namep, seatsp):
@@ -40,16 +41,11 @@ class STV:
     def _sort_by_vote(self):
         for c in self.candidates.values():
             c.sum_votes()
+        self.totalwaste = 0
+        for v in self.voters.values():
+            self.totalwaste += v.waste
 
-        act = self.active
-        end = len(act)
-        for i in range(0, end-1):
-            imax = i
-            for j in range(i, end):
-                if act[imax].votes < act[j].votes:
-                    temp = act[imax]
-                    act[imax] = act[j]
-                    act[j] = temp
+        self.active.sort(key=lambda c: c.votes, reverse=True)
 
     def prepare_for_count(self):
         for c in self.candidates.values():
@@ -60,16 +56,24 @@ class STV:
             v.allocate_votes()
         self._sort_by_vote()
 
-    def sum_waste(self):
-        self.totalwaste = 0
-        for v in self.voters.values():
-            self.totalwaste += v.waste
+    def process_candidate(self, candidate, newstatus):
+        if newstatus == LOST:
+            self.active.remove(candidate)
+            self.losers.append(candidate)
+        elif newstatus == OPEN:
+            self.losers.remove(candidate)
+            self.active.append(candidate)
+        elif newstatus in [PARTIAL, FULL]:
+            self.active.remove(candidate)
+            self.winners.append(candidate)
+
+        candidate.update_votelinks(newstatus)
 
     def next_round(self):
         status = STVStatus()
         if len(self.winners) == self.totalseats:  # finish
             status.finished = True
-        elif len(self.winners) + len(self.active) < self.totalseats:  # repechage
+        elif len(self.winners) + len(self.active) < self.totalseats:  # reactivation
             roundreturned = None
             for c in self.losers[::-1]:
                 if not c.group.is_full():
@@ -77,65 +81,59 @@ class STV:
                     break
 
             if roundreturned is not None:
-                self.losers.remove(roundreturned)
-                self.active.append(roundreturned)
-                roundreturned.update_votelinks(OPEN)
+                self.process_candidate(roundreturned, OPEN)
 
                 status.candidate = roundreturned
                 status.result = 0
                 status.continuepossible = True
             else:
                 status.message = 'Repechage failed'
-        else:  # continue elimination
+        else:  # elimination
             topcandidate = self.active[0]
-
+            # Win
             if topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
                 roundwinner = topcandidate
+                roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
+                self.process_candidate(roundwinner, PARTIAL)
+
                 status.candidate = roundwinner
                 status.result = 1
-
-                self.active.remove(roundwinner)
-                self.winners.append(roundwinner)
-
-                roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
-                roundwinner.update_votelinks(PARTIAL)
 
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
                 if self.usegroups and wgroup.is_full():
                     for c in self.active:
                         if c.group == wgroup:
-                            grouploser = c
-                            status.deleted_by_group.append(grouploser)
+                            self.process_candidate(c, LOST)
 
-                            self.active.remove(c)
-                            self.losers.append(grouploser)
+                            status.deleted_by_group.append(c)
 
-                            grouploser.update_votelinks(LOST)
+            # Lose
             else:
-                roundloser = self.active.pop()
+                roundloser = self.active[-1]
+                self.process_candidate(roundloser, LOST)
+
                 status.candidate = roundloser
                 status.result = -1
 
-                self.losers.append(roundloser)
+            status.continuepossible = True
 
-                roundloser.update_votelinks(LOST)
-
-            # General Redistribution of votes
-            doreduce = True
-            while doreduce:
-                doreduce = False
-                for winner in self.winners[::-1]:
-                    doreduce = doreduce or winner.doreduce
+        # General Redistribution of votes
+        doreduce = True
+        while doreduce:
+            for voter in self.voters.values():
+                if voter.doallocate:
+                    voter.allocate_votes()
+            doreduce = False
+            for winner in self.winners[::-1]:
+                doreduce = doreduce or winner.doreduce
+                if winner.doreduce:
                     winner.reduce()
                     for vl in winner.votelinks:
-                        vl.voter.allocate_votes()
-
-            status.continuepossible = True
+                        vl.voter.doallocate = True  # allocate_votes()
 
         self._sort_by_vote()
         self.rounds += 1
-        self.sum_waste()
 
         return status
 
@@ -194,7 +192,7 @@ class _Candidate:
             vl.update_status(newstatus)
 
         for vl in self.votelinks:
-            vl.voter.allocate_votes()
+            vl.voter.doallocate = True  # allocate_votes()
 
     def reduce(self):
         self.doreduce = False
@@ -237,6 +235,7 @@ class _Voter:
         self.uid = uidp
         self.votelinks = []
         self.waste = 0
+        self.doallocate = False
 
     def pk(self):
         return self.uid
@@ -255,7 +254,7 @@ class _Voter:
                 vl.weight = total
                 total = 0
 
-                if vl.weight > 0 and vl.candidate.wonatquota > 0:
+                if vl.weight > 0 and vl.candidate.wonatquota > 0:  # new available support to winner
                     vl.update_status(PARTIAL)
                     vl.candidate.doreduce = True
 
