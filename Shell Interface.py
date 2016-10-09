@@ -62,7 +62,9 @@ if viewmode == 'r':
 
 laststatus = stv.next_round()
 while laststatus.continuepossible:
-    print('Round:', stv.rounds, '\n')
+    print('Round:', stv.rounds)
+    print('Subround:', stv.subrounds) if stv.nolosers else None
+    print()
 
     if laststatus.result != 0:
         resulttranslate = {1: 'Won', -1: 'Lost'}

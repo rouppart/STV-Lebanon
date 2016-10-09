@@ -15,6 +15,8 @@ class STV:
         self.totalseats = 0
         self.totalwaste = 0
         self.rounds = 0
+        self.issubround = False
+        self.subrounds = 0
         self.groups = dict()
         self.candidates = dict()
         self.voters = dict()
@@ -72,6 +74,13 @@ class STV:
         candidate.update_votelinks(newstatus)
 
     def next_round(self):
+        if self.issubround:
+            self.subrounds += 1
+        else:
+            self.rounds += 1
+            self.subrounds = 1
+        self.issubround = self.nolosers
+
         status = STVStatus()
 
         # finish
@@ -123,6 +132,7 @@ class STV:
                 if self.nolosers and self.losers:
                     self.doreactivate = True
 
+                self.issubround = False
             # Lose
             else:
                 roundloser = self.active[-1]
@@ -148,7 +158,6 @@ class STV:
                         vl.voter.doallocate = True
 
         self._sort_by_vote()
-        self.rounds += 1
 
         return status
 
