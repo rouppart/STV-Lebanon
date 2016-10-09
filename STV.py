@@ -115,7 +115,7 @@ class STV:
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
                 if self.usegroups and wgroup.is_full():
-                    for c in self.active:
+                    for c in self.active[:]:
                         if c.group == wgroup:
                             self._process_candidate(c, LOST)
 
@@ -264,6 +264,8 @@ class _Voter:
         for vl in self.votelinks:
             if vl.status in [PARTIAL, FULL]:
                 total -= vl.weight
+            else:
+                vl.weight = 0
 
         for vl in self.votelinks:
             if vl.status == OPEN:
@@ -273,6 +275,7 @@ class _Voter:
                 if vl.weight > 0 and vl.candidate.wonatquota > 0:  # new available support to winner
                     vl.update_status(PARTIAL)
                     vl.candidate.doreduce = True
+                break
 
         self.waste = total
 
@@ -290,11 +293,9 @@ class _VoteLink:
         self.status = OPEN
 
     def update_status(self, newstatus):
-        allowed = (self.status == OPEN and newstatus == LOST) or (self.status <= newstatus and self.weight > 0) \
-                   or (self.status == LOST and newstatus == OPEN)
-        if allowed:
+        if (self.status == OPEN and newstatus == LOST) or (self.status <= newstatus and self.weight > 0)\
+                or (self.status == LOST and newstatus == OPEN):
             self.status = newstatus
-            if newstatus == LOST:
-                self.weight = 0
-
-        return allowed
+            return True
+        else:
+            return False

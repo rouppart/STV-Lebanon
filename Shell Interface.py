@@ -57,11 +57,11 @@ def print_status():
 print('Initial List:')
 print_status()
 print('---------------------------\n')
+if viewmode == 'r':
+    input('Press any key to continue to start')
 
 laststatus = stv.next_round()
 while laststatus.continuepossible:
-    if viewmode == 'r':
-        input('Press any key to continue to next round...')
     print('Round:', stv.rounds, '\n')
 
     if laststatus.result != 0:
@@ -80,6 +80,8 @@ while laststatus.continuepossible:
         print()
     print_status()
     print('---------------------------\n')
+    if viewmode == 'r':
+        input('Press any key to continue to next round...')
     laststatus = stv.next_round()
 
 
