@@ -1,7 +1,7 @@
-LOST = -1  # lost support
-OPEN = 0  # open support
-PARTIAL = 1  # partial support
-FULL = 2  # full support
+LOST = -1  # Lost support
+OPEN = 0  # Open support
+PARTIAL = 1  # Partial support
+FULL = 2  # Full support
 
 
 # Area
@@ -144,18 +144,16 @@ class STV:
             status.continuepossible = True
 
         # General Redistribution of votes
-        doreduce = True
-        while doreduce:
+        repeatreduce = True
+        while repeatreduce:
+            repeatreduce = False
             for voter in self.voters.values():
                 if voter.doallocate:
                     voter.allocate_votes()
-            doreduce = False
             for winner in self.winners[::-1]:
-                doreduce = doreduce or winner.doreduce
                 if winner.doreduce:
+                    repeatreduce = True
                     winner.reduce()
-                    for vl in winner.votelinks:
-                        vl.voter.doallocate = True
 
         self._sort_by_vote()
 
@@ -222,12 +220,15 @@ class _Candidate:
     def reduce(self):
         self.doreduce = False
         supportingvoters = 0
-        for vl in self.votelinks:  # count voters and set allocate to partial
+
+        # Count voters and set allocate to partial
+        for vl in self.votelinks:
             if vl.status > OPEN:
                 supportingvoters += 1
 
+        # Create ordered list of partial votelinks
         partialvls = []
-        for vl in self.votelinks:  # create ordered list of partial votelinks
+        for vl in self.votelinks:
             if vl.status == PARTIAL:
                 i = 0
                 while i < len(partialvls):
@@ -236,22 +237,26 @@ class _Candidate:
                     i += 1
                 partialvls.insert(i, vl)
 
+        # Calculate new full support fraction
         i = 0
         totalpartialweight = 0
         fullsupportfraction = self.wonatquota / supportingvoters
-        while i < len(partialvls) and fullsupportfraction > partialvls[i].weight:  # calculate new full support fraction
+        while i < len(partialvls) and fullsupportfraction > partialvls[i].weight:
             totalpartialweight += partialvls[i].weight
             i += 1
             if supportingvoters - i > 0:
                 fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
 
-        while i < len(partialvls):  # fix status of partials who can now support fully
+        # Fix status of partials who can now support fully
+        while i < len(partialvls):
             partialvls[i].update_status(FULL)
             i += 1
 
-        for vl in self.votelinks:  # reduce full support
+        # Reduce full support
+        for vl in self.votelinks:
             if vl.status == FULL:
                 vl.weight = fullsupportfraction
+                vl.voter.doallocate = True
 
 
 # Voter
@@ -269,6 +274,9 @@ class _Voter:
         self.votelinks.append(votelinkp)
 
     def allocate_votes(self):
+        self.doallocate = False
+
+        # Collect all fixed weight and reset unfixed weight
         total = 1
         for vl in self.votelinks:
             if vl.status in [PARTIAL, FULL]:
@@ -276,12 +284,14 @@ class _Voter:
             else:
                 vl.weight = 0
 
+        # Give unfixed weight to first Open votelink
         for vl in self.votelinks:
             if vl.status == OPEN:
                 vl.weight = total
                 total = 0
 
-                if vl.weight > 0 and vl.candidate.wonatquota > 0:  # new available support to winner
+                # New available support to previous winner
+                if vl.weight > 0 and vl.candidate.wonatquota > 0:
                     vl.update_status(PARTIAL)
                     vl.candidate.doreduce = True
                 break
