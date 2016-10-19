@@ -27,7 +27,7 @@ f.close()
 stv.prepare_for_count()
 
 nameformat = '{:<20}'
-voteformat = '{:.2g}'
+voteformat = '{:.3g}'
 ratioformat = '{:.0%}'
 
 viewvoter = input('Please enter your unique id to see the progression of your vote: ')
@@ -63,7 +63,7 @@ if viewmode == 'r':
 laststatus = stv.next_round()
 while laststatus.continuepossible:
     print('Round:', stv.rounds)
-    print('Subround:', stv.subrounds) if stv.nolosers else None
+    print('Subround:', stv.subrounds) if stv.reactivation else None
     print()
 
     if laststatus.result != 0:

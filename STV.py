@@ -6,10 +6,10 @@ FULL = 2  # Full support
 
 # Area
 class STV:
-    def __init__(self, areanamep, usegroupsp=False, nolosersp=False):
+    def __init__(self, areanamep, usegroupsp=False, reactivationp=False):
         self.areaname = areanamep
         self.usegroups = usegroupsp
-        self.nolosers = nolosersp
+        self.reactivation = reactivationp
 
         self.quota = 0
         self.totalseats = 0
@@ -79,7 +79,7 @@ class STV:
         else:
             self.rounds += 1
             self.subrounds = 1
-        self.issubround = self.nolosers
+        self.issubround = self.reactivation
 
         status = STVStatus()
 
@@ -88,8 +88,8 @@ class STV:
             status.finished = True
 
         # reactivation
-        elif not self.nolosers and len(self.winners) + len(self.active) < self.totalseats\
-                or self.nolosers and len(self.active) == 0\
+        elif not self.reactivation and len(self.winners) + len(self.active) < self.totalseats\
+                or self.reactivation and len(self.active) == 0\
                 or self.doreactivate:
             self.doreactivate = False
             status.result = 0
@@ -100,7 +100,7 @@ class STV:
                     status.continuepossible = True
                     status.reactivated.append(c)
 
-                    if not self.nolosers:
+                    if not self.reactivation:
                         break
 
             if not status.continuepossible:
@@ -112,8 +112,8 @@ class STV:
 
             # Win
             if topcandidate.votes >= self.quota \
-                    or not self.nolosers and len(self.winners) + len(self.active) == self.totalseats \
-                    or self.nolosers and len(self.active) == 1:
+                    or not self.reactivation and len(self.winners) + len(self.active) == self.totalseats \
+                    or self.reactivation and len(self.active) == 1:
                 roundwinner = topcandidate
                 roundwinner.wonatquota = self.quota if roundwinner.votes > self.quota else roundwinner.votes
                 self._process_candidate(roundwinner, PARTIAL)
@@ -129,7 +129,7 @@ class STV:
                             self._process_candidate(c, LOST)
 
                             status.deleted_by_group.append(c)
-                if self.nolosers and self.losers:
+                if self.reactivation and self.losers:
                     self.doreactivate = True
 
                 self.issubround = False
@@ -284,17 +284,20 @@ class _Voter:
             else:
                 vl.weight = 0
 
-        # Give unfixed weight to first Open votelink
-        for vl in self.votelinks:
-            if vl.status == OPEN:
-                vl.weight = total
-                total = 0
+        # Give unfixed weight to first Open votelink or Partial votelink as long as previsous is FULL
+        if total > 0:
+            givetopartial = True
+            for vl in self.votelinks:
+                if vl.status == OPEN or vl.status == PARTIAL and givetopartial:
+                    vl.weight += total
+                    total = 0
 
-                # New available support to previous winner
-                if vl.weight > 0 and vl.candidate.wonatquota > 0:
-                    vl.update_status(PARTIAL)
-                    vl.candidate.doreduce = True
-                break
+                    # New available support to previous winner
+                    if vl.candidate.wonatquota > 0:
+                        vl.update_status(PARTIAL)
+                        vl.candidate.doreduce = True
+                    break
+                givetopartial = givetopartial and vl.status == FULL
 
         self.waste = total
 
