@@ -1,10 +1,19 @@
 from STV import STV
 
-# Fill Objects
+# Setup
+print('Options:\n'
+      '"r" to view the count by round\n'
+      '"g" to use group quotas\n'
+      '"n" for no reactivation')
+viewmode = input('Type any number of options: ')
+viewbyround = 'r' in viewmode
+viewvoter = input('Please enter your unique id to see the progression of your vote: ')
 
+
+# Fill Objects
 f = open('Area.csv', 'r')
 areaname, groups = f.readline().strip().split(',')
-stv = STV(areaname, True, True)
+stv = STV(areaname, 'g' in viewmode, 'n' not in viewmode)
 for group in groups.split(';'):
     groupname, seats = group.split(':')
     stv.add_group(groupname, int(seats))
@@ -16,12 +25,12 @@ for l in f:
     stv.add_candidate(uid, name, groupname)
 f.close()
 
-f = open('Votes.csv', 'r')
+f \
+    = open('Votes.csv', 'r')
 for l in f:
     uid, votes = l.strip().split(',')
     stv.add_voter(uid, votes)
 f.close()
-
 
 # Count
 stv.prepare_for_count()
@@ -29,9 +38,6 @@ stv.prepare_for_count()
 nameformat = '{:<20}'
 voteformat = '{:.3g}'
 ratioformat = '{:.0%}'
-
-viewvoter = input('Please enter your unique id to see the progression of your vote: ')
-viewmode = input('Pleater enter "r" to view the count by round: ')
 
 print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
       '  Quota:', voteformat.format(stv.quota), '\n')
@@ -54,41 +60,46 @@ def print_status():
         print(nameformat.format('Waste'), ratioformat.format(stv.voters[viewvoter].waste))
     print()
 
+
 print('Initial List:')
 print_status()
 print('---------------------------\n')
-if viewmode == 'r':
+if viewbyround:
     input('Press any key to continue to start')
 
 laststatus = stv.next_round()
 while laststatus.continuepossible:
-    print('Round:', stv.rounds)
-    print('Subround:', stv.subrounds) if stv.reactivation else None
-    print()
-
-    if laststatus.result != 0:
-        resulttranslate = {1: 'Won', -1: 'Lost'}
-        print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
-    else:
-        print('The following candidates have been returned to the active list:')
-        for c in laststatus.reactivated:
-            print(c.name)
+    if viewbyround:
+        print('Round:', stv.rounds)
+        print('Subround:', stv.subrounds) if stv.reactivation else None
         print()
 
-    if laststatus.deleted_by_group:
-        print('The following candidates lost because their group quota has been met:')
-        for c in laststatus.deleted_by_group:
-            print(c.name)
-        print()
-    print_status()
-    print('---------------------------\n')
-    if viewmode == 'r':
+        if laststatus.result != 0:
+            resulttranslate = {1: 'Won', -1: 'Lost'}
+            print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
+        else:
+            print('Reactivation Round\n')
+
+        if laststatus.reactivated:
+            print('The following candidates have been returned to the active list:')
+            for c in laststatus.reactivated:
+                print(c.name)
+            print()
+
+        if laststatus.deleted_by_group:
+            print('The following candidates lost because their group quota has been met:')
+            for c in laststatus.deleted_by_group:
+                print(c.name)
+            print()
+
+        print_status()
+        print('---------------------------\n')
         input('Press any key to continue to next round...')
     laststatus = stv.next_round()
 
 
 print('Votes finished' if laststatus.finished else ('Error: '+laststatus.message))
-
+print_status()
 for group in stv.groups.values():
     print(group.name, group.seatswon, '/', group.seats)
 
