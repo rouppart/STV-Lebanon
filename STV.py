@@ -59,7 +59,6 @@ class STV:
 
         self.quota = len(self.voters) / self.totalseats
         for v in self.voters.values():
-            v.set_weight_limits(0, self.totalseats)
             v.allocate_votes()
         self._sort_by_vote()
 
@@ -154,8 +153,6 @@ class STV:
                 status.continuepossible = True
 
         # General Redistribution of votes
-        for v in self.voters.values():
-            v.set_weight_limits(len(self.winners), self.totalseats)
         repeatreduce = True
         while repeatreduce:
             repeatreduce = False
@@ -208,7 +205,6 @@ class _Candidate:
         self.votelinks = []
         self.votes = 0
         self.wonatquota = 0
-        self.fullsupportfraction = 1
         self.doreduce = False
 
     def pk(self):
@@ -251,14 +247,14 @@ class _Candidate:
                 partialvls.insert(i, vl)
 
         # Calculate new full support fraction
-        self.fullsupportfraction = self.wonatquota / supportingvoters
+        fullsupportfraction = self.wonatquota / supportingvoters
         i = 0
         totalpartialweight = 0
-        while i < len(partialvls) and self.fullsupportfraction > partialvls[i].weight:
+        while i < len(partialvls) and fullsupportfraction > partialvls[i].weight:
             totalpartialweight += partialvls[i].weight
             i += 1
             if supportingvoters - i > 0:
-                self.fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
+                fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
 
         # Fix status of partials who can now support fully
         while i < len(partialvls):
@@ -268,7 +264,7 @@ class _Candidate:
         # Reduce full support
         for vl in self.votelinks:
             if vl.status == FULL:
-                vl.weight = self.fullsupportfraction
+                vl.weight = fullsupportfraction
                 vl.voter.doallocate = True
 
 
@@ -285,20 +281,6 @@ class _Voter:
 
     def add_vote_link(self, votelinkp):
         self.votelinks.append(votelinkp)
-
-    def set_weight_limits(self, winners, totalseats):
-        limitslope = max(1 - winners / (totalseats - 1), 0)
-        limitedvls = []
-        for vl in self.votelinks:
-            if vl.status > EXCLUDED:
-                limitedvls.append(vl)
-            else:
-                vl.weightlimit = 0
-        i = 0
-        limitscount = len(limitedvls)
-        while i < limitscount:
-            limitedvls[i].weightlimit = 1 - i / limitscount * limitslope
-            i += 1
 
     def allocate_votes(self):
         self.doallocate = False
@@ -318,17 +300,13 @@ class _Voter:
                 break
 
             if vl.status in [OPEN, PARTIAL]:
-                realweightlimit = vl.candidate.fullsupportfraction
-                # realweightlimit = min(vl.weightlimit, vl.candidate.fullsupportfraction)
-                if vl.weight < realweightlimit:
-                    addweight = min(realweightlimit - vl.weight, total)
-                    vl.weight += addweight
-                    total -= addweight
+                vl.weight += total
+                total = 0
 
-                    # New available support to previous winner
-                    if vl.candidate.wonatquota > 0:
-                        vl.update_status(PARTIAL)
-                        vl.candidate.doreduce = True
+                # New available support to previous winner
+                if vl.candidate.wonatquota > 0:
+                    vl.update_status(PARTIAL)
+                    vl.candidate.doreduce = True
 
         self.waste = total
 
@@ -339,7 +317,6 @@ class _VoteLink:
         self.voter = voterp
         self.candidate = candidatep
         self.weight = 0
-        self.weightlimit = 1
 
         self.voter.add_vote_link(self)
         self.candidate.add_vote_link(self)

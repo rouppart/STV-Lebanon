@@ -56,8 +56,7 @@ def print_status():
         vlstatus = {-2:'Excluded', -1: 'Deactivated', 0: 'Open', 1: 'Partial', 2: 'Full'}
         print('\n'+stv.voters[viewvoter].uid, 'list:')
         for vl in stv.voters[viewvoter].votelinks:
-            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+ratioformat.format(vl.weightlimit),
-                  '\t'+vlstatus[vl.status])
+            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+vlstatus[vl.status])
         print(nameformat.format('Waste'), ratioformat.format(stv.voters[viewvoter].waste))
     print()
 
