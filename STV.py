@@ -1,4 +1,5 @@
-LOST = -1  # Lost support
+EXCLUDED = -2  # Permanent Lost support
+DEACTIVATED = -1  # Temporary Lost support
 OPEN = 0  # Open support
 PARTIAL = 1  # Partial support
 FULL = 2  # Full support
@@ -23,7 +24,8 @@ class STV:
 
         self.winners = []
         self.active = []
-        self.losers = []
+        self.deactivated = []
+        self.excluded = []
 
         self.doreactivate = False
 
@@ -57,31 +59,37 @@ class STV:
 
         self.quota = len(self.voters) / self.totalseats
         for v in self.voters.values():
+            v.set_weight_limits(0, self.totalseats)
             v.allocate_votes()
         self._sort_by_vote()
 
     def _process_candidate(self, candidate, newstatus):
-        if newstatus == LOST:
+        if newstatus == DEACTIVATED:
             self.active.remove(candidate)
-            self.losers.append(candidate)
+            self.deactivated.append(candidate)
         elif newstatus == OPEN:
-            self.losers.remove(candidate)
+            self.deactivated.remove(candidate)
             self.active.append(candidate)
-        elif newstatus in [PARTIAL, FULL]:
+        elif newstatus == PARTIAL:
             self.active.remove(candidate)
             self.winners.append(candidate)
+        elif newstatus == EXCLUDED:
+            if candidate in self.active:
+                self.active.remove(candidate)
+            else:
+                self.deactivated.remove(candidate)
+            self.excluded.append(candidate)
 
         candidate.update_votelinks(newstatus)
 
     def _reactivate(self):
         reactivated = []
-        for c in self.losers[::-1]:
-            if not self.usegroups or not c.group.is_full():
-                self._process_candidate(c, OPEN)
-                reactivated.append(c)
+        for c in self.deactivated[::-1]:
+            self._process_candidate(c, OPEN)
+            reactivated.append(c)
 
-                if not self.reactivation:
-                    break
+            if not self.reactivation:
+                break
 
         return reactivated
 
@@ -96,8 +104,7 @@ class STV:
         status = STVStatus()
 
         # reactivation
-        if not self.reactivation and len(self.winners) + len(self.active) < self.totalseats\
-                or self.reactivation and len(self.active) == 0:
+        if len(self.winners) + len(self.active) < self.totalseats:
             status.result = 0
             status.reactivated = self._reactivate()
             if len(status.reactivated) > 0:
@@ -121,18 +128,18 @@ class STV:
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
 
+                if self.usegroups and wgroup.is_full():
+                    for c in self.active[:] + self.deactivated[:]:
+                        if c.group == wgroup:
+                            self._process_candidate(c, EXCLUDED)
+                            status.deleted_by_group.append(c)
+
                 # Finish
                 if len(self.winners) == self.totalseats:
                     status.finished = True
+
                 else:
                     status.continuepossible = True
-
-                    if self.usegroups and wgroup.is_full():
-                        for c in self.active[:]:
-                            if c.group == wgroup:
-                                self._process_candidate(c, LOST)
-
-                                status.deleted_by_group.append(c)
                     if self.reactivation:
                         status.reactivated = self._reactivate()
 
@@ -140,13 +147,15 @@ class STV:
             # Lose
             else:
                 roundloser = self.active[-1]
-                self._process_candidate(roundloser, LOST)
+                self._process_candidate(roundloser, DEACTIVATED if self.reactivation else EXCLUDED)
 
                 status.candidate = roundloser
                 status.result = -1
                 status.continuepossible = True
 
         # General Redistribution of votes
+        for v in self.voters.values():
+            v.set_weight_limits(len(self.winners), self.totalseats)
         repeatreduce = True
         while repeatreduce:
             repeatreduce = False
@@ -199,6 +208,7 @@ class _Candidate:
         self.votelinks = []
         self.votes = 0
         self.wonatquota = 0
+        self.fullsupportfraction = 1
         self.doreduce = False
 
     def pk(self):
@@ -241,14 +251,14 @@ class _Candidate:
                 partialvls.insert(i, vl)
 
         # Calculate new full support fraction
-        fullsupportfraction = self.wonatquota / supportingvoters
+        self.fullsupportfraction = self.wonatquota / supportingvoters
         i = 0
         totalpartialweight = 0
-        while i < len(partialvls) and fullsupportfraction > partialvls[i].weight:
+        while i < len(partialvls) and self.fullsupportfraction > partialvls[i].weight:
             totalpartialweight += partialvls[i].weight
             i += 1
             if supportingvoters - i > 0:
-                fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
+                self.fullsupportfraction = (self.wonatquota - totalpartialweight) / (supportingvoters - i)
 
         # Fix status of partials who can now support fully
         while i < len(partialvls):
@@ -258,7 +268,7 @@ class _Candidate:
         # Reduce full support
         for vl in self.votelinks:
             if vl.status == FULL:
-                vl.weight = fullsupportfraction
+                vl.weight = self.fullsupportfraction
                 vl.voter.doallocate = True
 
 
@@ -276,6 +286,20 @@ class _Voter:
     def add_vote_link(self, votelinkp):
         self.votelinks.append(votelinkp)
 
+    def set_weight_limits(self, winners, totalseats):
+        limitslope = max(1 - winners / (totalseats - 1), 0)
+        limitedvls = []
+        for vl in self.votelinks:
+            if vl.status > EXCLUDED:
+                limitedvls.append(vl)
+            else:
+                vl.weightlimit = 0
+        i = 0
+        limitscount = len(limitedvls)
+        while i < limitscount:
+            limitedvls[i].weightlimit = 1 - i / limitscount * limitslope
+            i += 1
+
     def allocate_votes(self):
         self.doallocate = False
 
@@ -287,21 +311,24 @@ class _Voter:
             else:
                 vl.weight = 0
 
-        # Give unfixed weight to first Open votelink or Partial votelink as long as previsous is FULL or lost forever
-        if total > 0:
-            givetopartial = True
-            for vl in self.votelinks:
-                if vl.status == OPEN or vl.status == PARTIAL and givetopartial:
-                    vl.weight += total
-                    total = 0
+        # Spread unfixed weight to Open or Partial votelinks
+        for vl in self.votelinks:
+            # Stop if no more unfixed weight
+            if total == 0:
+                break
+
+            if vl.status in [OPEN, PARTIAL]:
+                realweightlimit = vl.candidate.fullsupportfraction
+                # realweightlimit = min(vl.weightlimit, vl.candidate.fullsupportfraction)
+                if vl.weight < realweightlimit:
+                    addweight = min(realweightlimit - vl.weight, total)
+                    vl.weight += addweight
+                    total -= addweight
 
                     # New available support to previous winner
                     if vl.candidate.wonatquota > 0:
                         vl.update_status(PARTIAL)
                         vl.candidate.doreduce = True
-                    break
-                # Evaluate next givetopartial
-                givetopartial = givetopartial and (vl.status == FULL or vl.candidate.group.is_full())
 
         self.waste = total
 
@@ -312,6 +339,7 @@ class _VoteLink:
         self.voter = voterp
         self.candidate = candidatep
         self.weight = 0
+        self.weightlimit = 1
 
         self.voter.add_vote_link(self)
         self.candidate.add_vote_link(self)
@@ -319,9 +347,7 @@ class _VoteLink:
         self.status = OPEN
 
     def update_status(self, newstatus):
-        if (self.status == OPEN and newstatus == LOST) or (self.status <= newstatus and self.weight > 0)\
-                or (self.status == LOST and newstatus == OPEN):
+        if (OPEN >= self.status >= newstatus)\
+                or (OPEN <= self.status <= newstatus and self.weight > 0)\
+                or (self.status == DEACTIVATED and newstatus == OPEN):
             self.status = newstatus
-            return True
-        else:
-            return False

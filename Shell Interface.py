@@ -44,7 +44,7 @@ print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len
 
 
 def print_status():
-    statcands = [('W', stv.winners), ('A', stv.active), ('L', stv.losers[::-1])]
+    statcands = [('W', stv.winners), ('A', stv.active), ('D', stv.deactivated[::-1]), ('E', stv.excluded[::-1])]
 
     for status, candidates in statcands:
         for candidate in candidates:
@@ -53,10 +53,11 @@ def print_status():
     print(nameformat.format('Total Waste')+' ', voteformat.format(stv.totalwaste))
 
     if viewvoter in stv.voters.keys():
-        vlstatus = {-1: 'Lost', 0: 'Open', 1: 'Partial', 2: 'Full'}
+        vlstatus = {-2:'Excluded', -1: 'Deactivated', 0: 'Open', 1: 'Partial', 2: 'Full'}
         print('\n'+stv.voters[viewvoter].uid, 'list:')
         for vl in stv.voters[viewvoter].votelinks:
-            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+vlstatus[vl.status])
+            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+ratioformat.format(vl.weightlimit),
+                  '\t'+vlstatus[vl.status])
         print(nameformat.format('Waste'), ratioformat.format(stv.voters[viewvoter].waste))
     print()
 
@@ -97,8 +98,7 @@ while laststatus.continuepossible:
         input('Press any key to continue to next round...')
     laststatus = stv.next_round()
 
-
-print('Votes finished' if laststatus.finished else ('Error: '+laststatus.message))
+print('Votes finished\n' if laststatus.finished else ('Error: '+laststatus.message))
 print_status()
 for group in stv.groups.values():
     print(group.name, group.seatswon, '/', group.seats)
