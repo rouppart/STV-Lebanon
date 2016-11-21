@@ -25,8 +25,7 @@ for l in f:
     stv.add_candidate(uid, name, groupname)
 f.close()
 
-f \
-    = open('Votes.csv', 'r')
+f = open('Votes.csv', 'r')
 for l in f:
     uid, votes = l.strip().split(',')
     stv.add_voter(uid, votes)
@@ -75,7 +74,7 @@ while laststatus.continuepossible:
         print()
 
         if laststatus.result != 0:
-            resulttranslate = {1: 'Won', -1: 'Lost'}
+            resulttranslate = {1: 'Won', -1: 'lost' if 'n' in viewmode else 'been deactivated'}
             print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
         else:
             print('Reactivation Round\n')
@@ -87,7 +86,7 @@ while laststatus.continuepossible:
             print()
 
         if laststatus.deleted_by_group:
-            print('The following candidates lost because their group quota has been met:')
+            print('The following candidates have been excluded because their group quota has been met:')
             for c in laststatus.deleted_by_group:
                 print(c.name)
             print()
