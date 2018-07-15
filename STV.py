@@ -92,7 +92,10 @@ class STV:
 
         return reactivated
 
-    def next_round(self):
+    def __iter__(self):
+        return self
+
+    def __next__(self):  # Advance to next Round
         if self.issubround:
             self.subrounds += 1
         else:
@@ -106,10 +109,8 @@ class STV:
         if len(self.winners) + len(self.active) < self.totalseats:
             status.result = 0
             status.reactivated = self._reactivate()
-            if len(status.reactivated) > 0:
-                status.continuepossible = True
-            else:
-                status.message = 'Reactivation failed'
+            if len(status.reactivated) <= 0:
+                raise Exception('Reactivation failed')
 
         # elimination
         else:
@@ -128,7 +129,7 @@ class STV:
                 wgroup.seatswon += 1
 
                 if self.usegroups and wgroup.is_full():
-                    for c in self.active[:] + self.deactivated[:]:
+                    for c in self.active + self.deactivated:
                         if c.group == wgroup:
                             self._process_candidate(c, EXCLUDED)
                             status.deleted_by_group.append(c)
@@ -136,9 +137,8 @@ class STV:
                 # Finish
                 if len(self.winners) == self.totalseats:
                     status.finished = True
-
+                    raise StopIteration
                 else:
-                    status.continuepossible = True
                     if self.reactivation:
                         status.reactivated = self._reactivate()
 
@@ -150,7 +150,6 @@ class STV:
 
                 status.candidate = roundloser
                 status.result = -1
-                status.continuepossible = True
 
         # General Redistribution of votes
         repeatreduce = True
@@ -176,8 +175,6 @@ class STVStatus:
         self.result = None
         self.deleted_by_group = []
         self.reactivated = None
-        self.message = ''
-        self.continuepossible = False
         self.finished = False
 
 

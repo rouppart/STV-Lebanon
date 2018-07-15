@@ -1,5 +1,6 @@
 from STV import STV
 
+
 # Setup
 print('Options:\n'
       '"r" to view the count by round\n'
@@ -25,8 +26,7 @@ for l in f:
     stv.add_candidate(uid, name, groupname)
 f.close()
 
-f \
-    = open('Votes.csv', 'r')
+f = open('Votes.csv', 'r')
 for l in f:
     uid, votes = l.strip().split(',')
     stv.add_voter(uid, votes)
@@ -37,7 +37,7 @@ stv.prepare_for_count()
 
 nameformat = '{:<20}'
 voteformat = '{:.3g}'
-ratioformat = '{:.0%}'
+ratioformat = '{:>5.0%}'
 
 print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
       '  Quota:', voteformat.format(stv.quota), '\n')
@@ -67,39 +67,40 @@ print('---------------------------\n')
 if viewbyround:
     input('Press any key to continue to start')
 
-laststatus = stv.next_round()
-while laststatus.continuepossible:
-    if viewbyround:
-        print('Round:', stv.rounds)
-        print('Subround:', stv.subrounds) if stv.reactivation else None
-        print()
-
-        if laststatus.result != 0:
-            resulttranslate = {1: 'Won', -1: 'Lost'}
-            print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
-        else:
-            print('Reactivation Round\n')
-
-        if laststatus.reactivated:
-            print('The following candidates have been returned to the active list:')
-            for c in laststatus.reactivated:
-                print(c.name)
+try:
+    for laststatus in stv:
+        if viewbyround:
+            print('Round:', stv.rounds)
+            print('Subround:', stv.subrounds) if stv.reactivation else None
             print()
 
-        if laststatus.deleted_by_group:
-            print('The following candidates lost because their group quota has been met:')
-            for c in laststatus.deleted_by_group:
-                print(c.name)
-            print()
+            if laststatus.result != 0:
+                resulttranslate = {1: 'Won', -1: 'Lost'}
+                print(laststatus.candidate.name, 'has', resulttranslate[laststatus.result], '\n')
+            else:
+                print('Reactivation Round\n')
 
-        print_status()
-        print('---------------------------\n')
-        input('Press any key to continue to next round...')
-    laststatus = stv.next_round()
+            if laststatus.reactivated:
+                print('The following candidates have been returned to the active list:')
+                for c in laststatus.reactivated:
+                    print(c.name)
+                print()
 
-print('Votes finished\n' if laststatus.finished else ('Error: '+laststatus.message))
-print_status()
-for group in stv.groups.values():
-    print(group.name, group.seatswon, '/', group.seats)
+            if laststatus.deleted_by_group:
+                print('The following candidates lost because their group quota has been met:')
+                for c in laststatus.deleted_by_group:
+                    print(c.name)
+                print()
+
+            print_status()
+            print('---------------------------\n')
+            input('Press any key to continue to next round...')
+except Exception as e:
+    print('Error: ' + str(e))
+else:
+    print('Votes finished\n')
+    print_status()
+    for group in stv.groups.values():
+        print(group.name, group.seatswon, '/', group.seats)
 
 input('Press any key to exit...')
