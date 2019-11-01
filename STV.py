@@ -18,9 +18,9 @@ class STV:
         self.rounds = 0
         self.issubround = False
         self.subrounds = 0
-        self.groups = dict()
-        self.candidates = dict()
-        self.voters = dict()
+        self.groups = {}
+        self.candidates = {}
+        self.voters = {}
 
         self.winners = []
         self.active = []
@@ -31,16 +31,16 @@ class STV:
 
     def add_group(self, namep, seatsp):
         newgroup = _Group(namep, seatsp)
-        self.groups[newgroup.pk()] = newgroup
+        self.groups[newgroup.pk] = newgroup
         self.totalseats += seatsp
 
     def add_candidate(self, codep, namep, groupnamep):
         newcandidate = _Candidate(codep, namep, self.groups[groupnamep])
-        self.candidates[newcandidate.pk()] = newcandidate
+        self.candidates[newcandidate.pk] = newcandidate
 
     def add_voter(self, uidp, candlistp):
         newvoter = _Voter(uidp)
-        self.voters[newvoter.pk()] = newvoter
+        self.voters[newvoter.pk] = newvoter
         for c in candlistp:
             _VoteLink(newvoter, self.candidates[c])
 
@@ -128,7 +128,7 @@ class STV:
                 wgroup = roundwinner.group
                 wgroup.seatswon += 1
 
-                if self.usegroups and wgroup.is_full():
+                if self.usegroups and wgroup.is_full:
                     for c in self.active + self.deactivated:
                         if c.group == wgroup:
                             self._process_candidate(c, EXCLUDED)
@@ -178,16 +178,18 @@ class STVStatus:
         self.finished = False
 
 
-# Seat
+# Group
 class _Group:
     def __init__(self, namep, seatsp):
         self.name = namep
         self.seats = seatsp
         self.seatswon = 0
 
+    @property
     def pk(self):
         return self.name
 
+    @property
     def is_full(self):
         return self.seatswon >= self.seats
 
@@ -204,6 +206,7 @@ class _Candidate:
         self.wonatquota = 0
         self.doreduce = False
 
+    @property
     def pk(self):
         return self.code
 
@@ -273,6 +276,7 @@ class _Voter:
         self.waste = 0
         self.doallocate = False
 
+    @property
     def pk(self):
         return self.uid
 
@@ -310,6 +314,8 @@ class _Voter:
 
 # VoteLink
 class _VoteLink:
+    statusdescriptions = {-2: 'Excluded', -1: 'Deactivated', 0: 'Open', 1: 'Partial', 2: 'Full'}
+
     def __init__(self, voterp, candidatep):
         self.voter = voterp
         self.candidate = candidatep
@@ -325,3 +331,7 @@ class _VoteLink:
                 or (OPEN <= self.status <= newstatus and self.weight > 0)\
                 or (self.status == DEACTIVATED and newstatus == OPEN):
             self.status = newstatus
+
+    @property
+    def statustext(self):
+        return self.statusdescriptions[self.status]

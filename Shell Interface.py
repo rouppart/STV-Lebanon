@@ -12,25 +12,22 @@ viewvoter = input('Please enter your unique id to see the progression of your vo
 
 
 # Fill Objects
-f = open('Area.csv', 'r')
-areaname, groups = f.readline().strip().split(',')
-stv = STV(areaname, 'g' in viewmode, 'n' not in viewmode)
-for group in groups.split(';'):
-    groupname, seats = group.split(':')
-    stv.add_group(groupname, int(seats))
-f.close()
+with open('Area.csv', 'r') as f:
+    areaname, groups = f.readline().strip().split(',')
+    stv = STV(areaname, 'g' in viewmode, 'n' not in viewmode)
+    for group in groups.split(';'):
+        groupname, seats = group.split(':')
+        stv.add_group(groupname, int(seats))
 
-f = open('Candidates.csv', 'r')
-for l in f:
-    uid, name, groupname = l.strip().split(',')
-    stv.add_candidate(uid, name, groupname)
-f.close()
+with open('Candidates.csv', 'r') as f:
+    for l in f:
+        uid, name, groupname = l.strip().split(',')
+        stv.add_candidate(uid, name, groupname)
 
-f = open('Votes.csv', 'r')
-for l in f:
-    uid, votes = l.strip().split(',')
-    stv.add_voter(uid, votes)
-f.close()
+with open('Votes.csv', 'r') as f:
+    for l in f:
+        uid, votes = l.strip().split(',')
+        stv.add_voter(uid, votes)
 
 # Count
 stv.prepare_for_count()
@@ -52,11 +49,10 @@ def print_status():
     print('------------')
     print(nameformat.format('Total Waste')+' ', voteformat.format(stv.totalwaste))
 
-    if viewvoter in stv.voters.keys():
-        vlstatus = {-2:'Excluded', -1: 'Deactivated', 0: 'Open', 1: 'Partial', 2: 'Full'}
+    if viewvoter in stv.voters:
         print('\n'+stv.voters[viewvoter].uid, 'list:')
         for vl in stv.voters[viewvoter].votelinks:
-            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t'+vlstatus[vl.status])
+            print(nameformat.format(vl.candidate.name), ratioformat.format(vl.weight), '\t' + vl.statustext)
         print(nameformat.format('Waste'), ratioformat.format(stv.voters[viewvoter].waste))
     print()
 
@@ -102,5 +98,6 @@ else:
     print_status()
     for group in stv.groups.values():
         print(group.name, group.seatswon, '/', group.seats)
+    print('Waste Percentage:', round(stv.totalwaste / len(stv.voters) * 100), '%')
 
 input('Press any key to exit...')
