@@ -64,20 +64,16 @@ class STV:
 
     def _process_candidate(self, candidate, newstatus):
         if newstatus == DEACTIVATED:
-            self.active.remove(candidate)
-            self.deactivated.append(candidate)
+            candidate.move(self.active, self.deactivated)
         elif newstatus == OPEN:
-            self.deactivated.remove(candidate)
-            self.active.append(candidate)
+            candidate.move(self.deactivated, self.active)
         elif newstatus == PARTIAL:
-            self.active.remove(candidate)
-            self.winners.append(candidate)
+            candidate.move(self.active, self.winners)
         elif newstatus == EXCLUDED:
             if candidate in self.active:
-                self.active.remove(candidate)
+                candidate.move(self.active, self.excluded)
             else:
-                self.deactivated.remove(candidate)
-            self.excluded.append(candidate)
+                candidate.move(self.deactivated, self.excluded)
 
         candidate.update_votelinks(newstatus)
 
@@ -217,6 +213,10 @@ class _Candidate:
         self.votes = 0
         for l in self.votelinks:
             self.votes += l.weight
+
+    def move(self, fromlist, tolist):
+        fromlist.remove(self)
+        tolist.append(self)
 
     def update_votelinks(self, newstatus):
         self.doreduce = True
