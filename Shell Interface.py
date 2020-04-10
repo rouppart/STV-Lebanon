@@ -67,7 +67,7 @@ try:
     for laststatus in stv:
         if viewbyround:
             print('Round:', stv.rounds)
-            print('Subround:', stv.subrounds) if stv.reactivation else None
+            print('Subround:', stv.subrounds) if stv.reactivationmode else None
             print()
 
             if laststatus.result != 0:
