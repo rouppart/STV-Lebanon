@@ -20,13 +20,13 @@ with open('Area.csv', 'r') as f:
         stv.add_group(groupname, int(seats))
 
 with open('Candidates.csv', 'r') as f:
-    for l in f:
-        uid, name, groupname = l.strip().split(',')
+    for line in f:
+        uid, name, groupname = line.strip().split(',')
         stv.add_candidate(uid, name, groupname)
 
 with open('Votes.csv', 'r') as f:
-    for l in f:
-        uid, votes = l.strip().split(',')
+    for line in f:
+        uid, votes = line.strip().split(',')
         stv.add_voter(uid, votes)
 
 # Count

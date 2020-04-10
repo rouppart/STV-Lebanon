@@ -87,7 +87,6 @@ class STV:
 
         status = STVStatus()
 
-        topcandidate = self.active[0]
         missingseats = self.totalseats - len(self.winners) - len(self.active)
         if missingseats > 0:
             # Unexpected Reactivation Round
@@ -98,8 +97,9 @@ class STV:
             if len(status.reactivated) != missingseats:
                 raise Exception('Reactivation failed in Round {}.{}'.format(self.rounds, self.subrounds))
 
-        elif topcandidate.votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
+        elif self.active[0].votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
             # Win. Either Quota is reached, or cannot lose a candidate because active list becomes too small
+            topcandidate = self.active[0]
             topcandidate.wonatquota = self.quota if topcandidate.votes > self.quota else topcandidate.votes
             # Register at which vote amount the winner won in case he won below the quota
             self._process_candidate(topcandidate, self.active, self.winners, _VoteLink.PARTIAL)
