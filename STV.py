@@ -100,15 +100,18 @@ class STV:
         elif self.active[0].votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
             # Win. Either Quota is reached, or cannot lose a candidate because active list becomes too small
             topcandidate = self.active[0]
-            topcandidate.wonatquota = self.quota if topcandidate.votes > self.quota else topcandidate.votes
             # Register at which vote amount the winner won in case he won below the quota
-            self._process_candidate(topcandidate, self.active, self.winners, _VoteLink.PARTIAL)
+            topcandidate.wonatquota = self.quota if topcandidate.votes > self.quota else topcandidate.votes
             # Status set to PARTIAL and let Candidate's Reduce function decide if FULL
+            self._process_candidate(topcandidate, self.active, self.winners, _VoteLink.PARTIAL)
+            topcandidate.doreduce = True
 
-            status.candidate = topcandidate  # Update status
+            # Update status
+            status.candidate = topcandidate
             status.result = status.WIN
 
-            wgroup = topcandidate.group  # Update candidate's group
+            # Update candidate's group
+            wgroup = topcandidate.group
             wgroup.seatswon += 1
 
             # Process group constraints if groupquota is on

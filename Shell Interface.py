@@ -33,7 +33,7 @@ with open('Votes.csv', 'r') as f:
 stv.prepare_for_count()
 
 nameformat = '{:<20}'
-voteformat = '{:.3g}'
+voteformat = '{:.3g}' if len(stv.voters) < 100 else '{:,.0f}'
 ratioformat = '{:>5.0%}'
 
 print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
