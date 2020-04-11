@@ -306,9 +306,6 @@ class _VoteLink:
     PARTIAL = 1  # Partial support
     FULL = 2  # Full support
 
-    statusdescriptions = {EXCLUDED: 'Excluded', DEACTIVATED: 'Deactivated',
-                          OPEN: 'Open', PARTIAL: 'Partial', FULL: 'Full'}
-
     def __init__(self, voter, candidate):
         self.voter = voter
         self.candidate = candidate
@@ -320,8 +317,4 @@ class _VoteLink:
         self.status = self.OPEN
 
     def __repr__(self):
-        return 'VoteLink({}, {}, {})'.format(self.voter, self.candidate, self.statustext)
-
-    @property
-    def statustext(self):
-        return self.statusdescriptions[self.status]
+        return 'VoteLink({}, {}, {})'.format(self.voter, self.candidate, self.status)
