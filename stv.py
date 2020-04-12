@@ -63,7 +63,7 @@ class STV:
             voter.allocate_votes()
         self._sort_active()
         status = STVStatus()
-        status.result = status.INITIAL
+        status.initial = True
         yield status
 
         while True:
@@ -73,7 +73,7 @@ class STV:
             else:
                 self.rounds += 1
                 self.subrounds = 1
-            self.issubround = self.reactivationmode
+            self.issubround = True
 
             # Part 1: General Redistribution of votes
             status = STVStatus()
@@ -81,13 +81,13 @@ class STV:
             repeatreduce = True
             while repeatreduce:  # Main Loop
                 repeatreduce = False
+                status.loopcount += 1
                 for voter in self.voters.values():
                     if voter.doallocate:
                         voter.allocate_votes()  # This can give surplus votes to candidates
 
                         status.allocationcount += 1
                 if status.allocationcount > 0:
-                    status.result = status.ALLOCATION
                     yield status
                     status.allocationcount = 0
 
@@ -98,7 +98,6 @@ class STV:
 
                         status.reducecount += 1
                 if status.reducecount > 0:
-                    status.result = status.REDUCE
                     yield status
                     status.reducecount = 0
 
@@ -106,19 +105,9 @@ class STV:
 
             # Part 2: Decide
             status = STVStatus()
-            missingseats = self.totalseats - len(self.winners) - len(self.active)
-            if missingseats > 0:
-                # Unexpected Reactivation Round
-                # If there are not enough active candidates, reactivate some.
-                # This can happen if reactivationmode is off and group quotas exclude too many candidates
-                status.result = status.REACTIVATION
-                status.reactivated = self._reactivate(missingseats)
-                if len(status.reactivated) != missingseats:
-                    raise Exception('Reactivation failed in Round {}.{}'.format(self.rounds, self.subrounds))
-
-            elif self.active[0].votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
-                # Win. Either Quota is reached, or cannot lose a candidate because active list becomes too small
-                topcandidate = self.active[0]
+            topcandidate = self.active[0]
+            # Win. Either Quota is reached, or cannot lose a candidate because active list becomes too small
+            if self.active[0].votes >= self.quota or len(self.winners) + len(self.active) == self.totalseats:
                 # Register at which vote amount the winner won in case he won below the quota
                 topcandidate.wonatquota = self.quota if topcandidate.votes > self.quota else topcandidate.votes
                 # Status set to PARTIAL and let Candidate's Reduce function decide if FULL
@@ -126,8 +115,7 @@ class STV:
                 topcandidate.doreduce = True
 
                 # Update status
-                status.candidate = topcandidate
-                status.result = status.WIN
+                status.winner = topcandidate
 
                 # Update candidate's group
                 wgroup = topcandidate.group
@@ -139,10 +127,9 @@ class STV:
                         if c.group == wgroup:
                             fromlist = self.active if c in self.active else self.deactivated
                             self._process_candidate(c, fromlist, self.excluded, _VoteLink.EXCLUDED, True)
-                            status.deleted_by_group.append(c)
+                            status.excluded_by_group.append(c)
 
-                # Finish
-                if len(self.winners) == self.totalseats:
+                if len(self.winners) == self.totalseats:  # Finish and exit loop
                     status.finished = True
                     return status
                 elif self.reactivationmode:  # If win and not finished and reactivationmode is on
@@ -153,9 +140,16 @@ class STV:
                 # Remove last active candidate
                 roundloser = self.active[-1]
                 self._process_candidate(roundloser, self.active, self.deactivated, _VoteLink.DEACTIVATED, True)
+                status.loser = roundloser
 
-                status.candidate = roundloser
-                status.result = status.LOSS
+            # If there are not enough active candidates, reactivate some.
+            missingseats = self.totalseats - len(self.winners) - len(self.active)
+            if missingseats > 0:
+                # This can happen if reactivationmode is off and group quotas exclude too many candidates
+                status.reactivated = self._reactivate(missingseats)
+                if len(status.reactivated) != missingseats:
+                    raise Exception('Reactivation failed in Round {}.{}'.format(self.rounds, self.subrounds))
+
             yield status
 
     @staticmethod
@@ -184,25 +178,17 @@ class STV:
 
 class STVStatus:
     """ Result of each counting round """
-    # Result Constants
-    INITIAL = 0
-    LOSS = 1
-    REACTIVATION = 2
-    WIN = 3
-
-    # Loop status Constants
-    ALLOCATION = -1
-    REDUCE = -2
-
     def __init__(self):
         # Used to report Decision
-        self.candidate = None
-        self.result = None
-        self.deleted_by_group = []
+        self.winner = None
+        self.loser = None
+        self.excluded_by_group = []
         self.reactivated = None
+        self.initial = False
         self.finished = False
 
         # Used to report redistribution loop
+        self.loopcount = 0
         self.allocationcount = 0
         self.reducecount = 0
 

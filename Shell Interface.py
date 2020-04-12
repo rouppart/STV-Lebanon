@@ -1,4 +1,4 @@
-from STV import STV
+from stv import STV
 
 
 def main():
@@ -17,32 +17,32 @@ def main():
           '  Quota:', formatvote(stv.quota), '\n')
     
     for status in stv.start():
-        if viewloop or (viewbyround and status.result > 0) or status.result == status.INITIAL:
-            print('Round:', stv.rounds, end='')
-            print('.{}'.format(stv.subrounds) if stv.reactivationmode else '')
+        if viewloop or (viewbyround and status.loopcount == 0) or status.initial:
+            print('Round: {}.{}'.format(stv.rounds, stv.subrounds))
 
-            if status.result in (status.LOSS, status.WIN):
-                resulttranslate = {status.WIN: 'Win', status.LOSS: 'Loss'}
-                print(resulttranslate[status.result]+':', status.candidate.name)
-            elif status.result == status.REACTIVATION:
+            if status.winner is not None:
+                print('Win:', status.winner.name)
+            elif status.loser is not None:
+                print('Loss:', status.loser.name)
+            elif status.reactivated:
                 print('Reactivation Round')
-            elif status.result == status.INITIAL:
+            elif status.allocationcount > 0:
+                print('Loop:', status.loopcount, 'Allocations:', status.allocationcount)
+            elif status.reducecount > 0:
+                print('Loop:', status.loopcount, 'Reductions:', status.reducecount)
+            else:
                 print('Initial Round')
-            elif status.result == status.ALLOCATION:
-                print('Allocation Loops:', status.allocationcount)
-            elif status.result == status.REDUCE:
-                print('Reduce Loops:', status.reducecount)
             print()
+
+            if status.excluded_by_group:
+                print('The following candidates have been excluded because their group quota has been met:')
+                for c in status.excluded_by_group:
+                    print(c.name)
+                print()
 
             if status.reactivated:
                 print('The following candidates have been returned to the active list:')
                 for c in status.reactivated:
-                    print(c.name)
-                print()
-
-            if status.deleted_by_group:
-                print('The following candidates lost because their group quota has been met:')
-                for c in status.deleted_by_group:
                     print(c.name)
                 print()
 
