@@ -1,38 +1,43 @@
-from stv import STV
+from stv import STV, STVStatus
 
 
 def main():
     print('Options:\n'
-          '"r" to view the count by round or "l" by loop\n'
+          '"r" to view the count by round, "s" by subround or "l" by loop\n'
           '"g" to use group quotas\n'
           '"n" for no reactivation')
-    viewmode = input('Type any number of options: ')
-    viewloop = 'l' in viewmode
-    viewbyround = 'r' in viewmode or viewloop
+    viewoptions = input('Type any number of options: ')
+    if 'l' in viewoptions:
+        viewlevel = STVStatus.LOOP
+    elif 's' in viewoptions:
+        viewlevel = STVStatus.SUBROUND
+    elif 'r' in viewoptions:
+        viewlevel = STVStatus.ROUND
+    else:
+        viewlevel = STVStatus.END
     viewvoter = input('Please enter your unique id to see the progression of your vote: ')
 
-    stv = setup('g' in viewmode, 'n' not in viewmode)
+    stv = setup('g' in viewoptions, 'n' not in viewoptions)
 
     print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
           '  Quota:', formatvote(stv.quota), '\n')
     
     for status in stv.start():
-        if viewloop or (viewbyround and status.loopcount == 0) or status.initial:
-            print('Round: {}.{}'.format(stv.rounds, stv.subrounds))
+        if status.yieldlevel <= viewlevel and status.yieldlevel != status.BEGIN:
+            if status.yieldlevel == status.INITIAL:
+                print('Initial Round\n')
+            elif viewlevel >= status.ROUND:
+                print('Round: ' + '.'.join(map(str, [stv.rounds, stv.subrounds, stv.loopcount][:viewlevel-status.END])))
 
-            if status.winner is not None:
-                print('Win:', status.winner.name)
-            elif status.loser is not None:
-                print('Loss:', status.loser.name)
-            elif status.reactivated:
-                print('Reactivation Round')
-            elif status.allocationcount > 0:
-                print('Loop:', status.loopcount, 'Allocations:', status.allocationcount)
-            elif status.reducecount > 0:
-                print('Loop:', status.loopcount, 'Reductions:', status.reducecount)
-            else:
-                print('Initial Round')
-            print()
+                if status.winner is not None:
+                    print('Win:', status.winner.name)
+                elif status.loser is not None:
+                    print('Loss:', status.loser.name)
+                elif stv.allocationcount > 0:
+                    print('Allocations:', stv.allocationcount)
+                elif stv.reductioncount > 0:
+                    print('Reductions:', stv.reductioncount)
+                print()
 
             if status.excluded_by_group:
                 print('The following candidates have been excluded because their group quota has been met:')
@@ -49,16 +54,15 @@ def main():
             print_lists(stv, viewvoter)
 
             print('---------------------------\n')
-            input('Press any key to continue to next round...')
-            print()
-
-    print('Votes finished\n')
-    print_lists(stv, viewvoter)
-    for group in stv.groups.values():
-        print(group.name, group.seatswon, '/', group.seats)
-    print('Waste Percentage:', formatratio(stv.totalwaste / len(stv.voters)))
-
-    input('\nPress any key to exit...')
+            if not status.yieldlevel == status.END:
+                input('Press any key to continue to next round...')
+                print()
+            else:
+                print('Votes Finished')
+                for group in stv.groups.values():
+                    print(group.name, group.seatswon, '/', group.seats)
+                print('Waste Percentage:', formatratio(stv.totalwaste / len(stv.voters)))
+                input('\nPress any key to exit...')
 
 
 def setup(usegroups, reactivationmode):
