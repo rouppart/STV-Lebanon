@@ -278,17 +278,28 @@ class _Candidate:
                 vl.weight = fullsupportweight
                 self.dorefreshvotes = True  # Have to recalculate weight
                 vl.voter.doallocate = True
+                vl.voter.dorefreshwaste = True  # Have to recalculate waste
 
 
 class _Voter:
     def __init__(self, uid):
         self.uid = uid
         self.votelinks = []  # Links to candidate in order of preference
-        self.waste = 0
+        self._waste = 1
+        self.dorefreshwaste = False
         self.doallocate = True
 
     def __repr__(self):
         return 'Voter({})'.format(self.uid)
+
+    @property
+    def waste(self):
+        if self.dorefreshwaste:
+            self.dorefreshwaste = False
+            self._waste = 1
+            for vl in self.votelinks:
+                self._waste -= vl.weight
+        return self._waste
 
     def allocate_votes(self):
         self.doallocate = False
@@ -315,7 +326,7 @@ class _Voter:
                         vl.candidate.doreduction = True
                     break
 
-        self.waste = total
+        self._waste = total
 
 
 class _VoteLink:

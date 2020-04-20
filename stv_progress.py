@@ -14,6 +14,7 @@ class Position:
         self.loopcount = stv.loopcount
         self.loopisallocation = stv.allocationcount > 0
         self.loopisreduction = stv.reductioncount > 0
+        self.hasresult = status.winner is not None or status.loser is not None
 
         self.winners = tupelize_candidate_list(stv.winners)
         self.active = tupelize_candidate_list(stv.active)

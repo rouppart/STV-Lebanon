@@ -25,24 +25,23 @@ def add_driver(obj, path, path_index, var_data_path, expression):
 
 
 def build_location_animation(obj, ref):
-    for kf in ref.animation_location:
-        obj.location = kf.location
-        obj.keyframe_insert(data_path='location', frame=kf.frame)
+    for frame, location in ref.animation_location.items():
+        obj.location = location
+        obj.keyframe_insert(data_path='location', frame=frame)
 
 
 def build_fill_animation(obj, ref):
-    for kf in ref.animation_fill:
-        newfill = float(kf.fill)
-        obj['Votes'] = newfill
-        obj.keyframe_insert(data_path='["Votes"]', frame=kf.frame)
+    for frame, fill in ref.animation_fill.items():
+        obj['Votes'] = float(fill)
+        obj.keyframe_insert(data_path='["Votes"]', frame=frame)
 
 
 def build_hide_animation(obj, ref):
-    for kf in ref.animation_hide:
-        obj.hide_viewport = kf.hide
-        obj.keyframe_insert(data_path='hide_viewport', frame=kf.frame)
-        obj.hide_render = kf.hide
-        obj.keyframe_insert(data_path='hide_render', frame=kf.frame)
+    for frame, hide in ref.animation_hide.items():
+        obj.hide_viewport = hide
+        obj.keyframe_insert(data_path='hide_viewport', frame=frame)
+        obj.hide_render = hide
+        obj.keyframe_insert(data_path='hide_render', frame=frame)
 
 
 def build_bucket(buck: BucketG):

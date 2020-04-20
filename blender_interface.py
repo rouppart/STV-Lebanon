@@ -4,13 +4,17 @@ from stv_progress import STVProgress
 
 
 Location = namedtuple('Location', ['x', 'y', 'z'])
-LocationKF = namedtuple('LocationKF', ['frame', 'location'])
-FillKF = namedtuple('FillKF', ['frame', 'fill'])
-HideKF = namedtuple('HideKF', ['frame', 'hide'])
 
 
 def add_z_location(loc, z):
     return Location(loc.x, loc.y, loc.z + z)
+
+
+def get_last_frame(adata, maxf):
+    if maxf is None:
+        return max(adata.keys())
+    else:
+        return max(k for k in adata.keys() if k <= maxf)
 
 
 class BucketG:
@@ -20,30 +24,31 @@ class BucketG:
         self.heightratio = heightratio
         self.votefillheightratio = votefillheightratio
         self.border = border
-        self.animation_location = []
-        self.animation_fill = []
-        self.animation_hide = []
+        self.animation_location = {}
+        self.animation_fill = {}
+        self.animation_hide = {}
 
-    def get_last_location(self):
-        return self.animation_location[-1].location
+    def get_last_location(self, maxf=None):
+        return self.animation_location[get_last_frame(self.animation_location, maxf)]
 
-    def get_last_votes(self):
-        return self.animation_fill[-1].fill
+    def get_last_votes(self, maxf=None):
+        return self.animation_fill[get_last_frame(self.animation_fill, maxf)]
 
-    def get_last_fill_location(self):
-        return add_z_location(self.get_last_location(), self.border + self.fraction_to_height(self.get_last_votes()))
+    def get_last_fill_location(self, maxf=None):
+        zoffset = self.border + self.fraction_to_height(self.get_last_votes(maxf))
+        return add_z_location(self.get_last_location(maxf), zoffset)
 
     def move(self, frame, duration, tolocation, votes):
         if self.animation_location:
-            self.animation_location.append(LocationKF(frame, self.get_last_location()))
-        self.animation_location.append(LocationKF(frame + duration, tolocation))
+            self.animation_location[frame] = self.get_last_location()
+        self.animation_location[frame + duration] = tolocation
         # Make sure votes a stable during move and readjust to real value
-        self.animation_fill.append(FillKF(frame, votes))
-        self.animation_fill.append(FillKF(frame + duration, votes))
+        self.animation_fill[frame] = votes
+        self.animation_fill[frame + duration] = votes
 
         hide = votes < 0.001
-        self.animation_hide.append(HideKF(frame, hide))
-        self.animation_hide.append(HideKF(frame, hide))
+        self.animation_hide[frame] = hide
+        self.animation_hide[frame] = hide
 
     def fraction_to_height(self, fraction):
         return self.width * self.votefillheightratio * fraction
@@ -56,17 +61,20 @@ class VoteBaseG:
         self.heightratio = heightratio
         self.location = location
 
-        self.animation_fill = [FillKF(0, 1)]
-        self.animation_hide = [HideKF(0, False)]
+        self.animation_fill = {0: 1}
+        self.animation_hide = {0: False}
 
-    def get_last_location(self):
+    def get_last_location(self, _=None):
         return self.location
 
     def fraction_to_height(self, fraction):
         return self.width * self.heightratio * fraction
 
-    def get_last_fill_location(self):
-        return add_z_location(self.get_last_location(), self.fraction_to_height(self.animation_fill[-1].fill))
+    def get_last_votes(self, maxf=None):
+        return self.animation_fill[get_last_frame(self.animation_fill, maxf)]
+
+    def get_last_fill_location(self, maxf=None):
+        return add_z_location(self.get_last_location(), self.fraction_to_height(self.get_last_votes(maxf)))
 
 
 class VoteFractionG:
@@ -78,17 +86,17 @@ class VoteFractionG:
         self.width = width
         self.heightratio = heightratio
 
-        self.animation_location = [LocationKF(0, initlocation)]
-        self.animation_fill = [FillKF(0, 0)]
-        self.animation_hide = [HideKF(0, True)]
+        self.animation_location = {0: initlocation}
+        self.animation_fill = {0: 0}
+        self.animation_hide = {0: True}
 
     def extract(self, startframe, endframe, extractdur, fraction):
-        self.animation_hide.append(HideKF(startframe + 0.5, False))
-        self.animation_fill.append(FillKF(startframe, 0))
-        self.animation_fill.append(FillKF(startframe + extractdur, fraction))
-        self.animation_fill.append(FillKF(endframe - extractdur, fraction))
-        self.animation_fill.append(FillKF(endframe, 0))
-        self.animation_hide.append(HideKF(endframe - 0.5, True))
+        self.animation_hide[startframe + 0.5] = False
+        self.animation_fill[startframe] = 0
+        self.animation_fill[startframe + extractdur] = fraction
+        self.animation_fill[endframe - extractdur] = fraction
+        self.animation_fill[endframe] = 0
+        self.animation_hide[endframe - 0.5] = True
 
     def transfer(self, issend, frame, movedur, extractdur, fraction):
         """ Animate the move of VF in either direction """
@@ -105,40 +113,39 @@ class VoteFractionG:
 
         self.extract(startf, endf, extractdur, fraction)
 
-        self.animation_location.append(LocationKF(startf - 0.5, start_loc))
-        self.animation_location.append(LocationKF(startf, start_loc))
+        self.animation_location[startf - 0.5] = start_loc
+        self.animation_location[startf] = start_loc
         adjust_fill(startobj, startf, extractdur, -fraction)
-        self.animation_location.append(LocationKF(startf + extractdur, start_loc2))
-        self.animation_location.append(LocationKF(startf + extractdur + 0.5, start_loc2))
+        self.animation_location[startf + extractdur] = start_loc2
+        self.animation_location[startf + extractdur + 0.5] = start_loc2
 
-        self.animation_location.append(LocationKF(endf - extractdur - 0.5, end_loc))
-        self.animation_location.append(LocationKF(endf - extractdur, end_loc))
+        self.animation_location[endf - extractdur - 0.5] = end_loc
+        self.animation_location[endf - extractdur] = end_loc
         adjust_fill(endobj, endf - extractdur, extractdur, fraction)
-        self.animation_location.append(LocationKF(endf, end_loc2))
-        self.animation_location.append(LocationKF(endf + 0.5, end_loc2))
+        self.animation_location[endf] = end_loc2
+        self.animation_location[endf + 0.5] = end_loc2
 
 
-def adjust_fill(objg, frame, extractdur, fraction):
+def adjust_fill(objg: BucketG or VoteBaseG, frame, extractdur, fraction):
+    fdata = objg.animation_fill
     startf = frame
     endf = frame + extractdur
 
-    # Fill
-    lastfkf = objg.animation_fill[-1]
-    newfill = lastfkf.fill + fraction
+    prev_endf = get_last_frame(fdata, endf)
+    if startf > prev_endf:  # Skip adding start keyframe
+        fdata[startf] = fdata[prev_endf]
 
-    if lastfkf.frame == endf:
-        objg.animation_fill[-1] = FillKF(endf, newfill)  # Probably don't need to check startf
-    elif lastfkf.frame == startf:
-        objg.animation_fill.append(FillKF(endf, newfill))
-    else:
-        objg.animation_fill.append(FillKF(startf, lastfkf.fill))
-        objg.animation_fill.append(FillKF(endf, newfill))
+    fdata[endf] = endfill = fdata[prev_endf] + fraction
+
+    prev_startf = get_last_frame(fdata, startf)  # Check to delete previous endf if aligned
+    if fdata[prev_startf] < fdata[prev_endf] < fdata[endf]:
+        del fdata[prev_endf]
 
     # Hide
-    if newfill > 0:
-        objg.animation_hide.append(HideKF(startf + 0.5, False))
+    if endfill > 0:
+        objg.animation_hide[startf + 0.5] = False
     else:
-        objg.animation_hide.append(HideKF(endf - 0.5, True))
+        objg.animation_hide[endf - 0.5] = True
 
 
 def build(stv):
@@ -181,29 +188,34 @@ def build(stv):
                                                         vbase.location)
 
     # Build animations
-    finterval = 30
     frame = 30
+    finterval = 30
+    extractdur = 6
+    stagger = 0
     for t, pos in stvp.get_tansform_and_position():
         if t is not None and t.returnvfs:
             for vf in t.returnvfs:
-                vfgs[(vf.voterid, vf.candidatecode)].transfer(False, frame, finterval, 6, vf.fraction)
+                vfgs[(vf.voterid, vf.candidatecode)].transfer(False, frame, finterval, extractdur, vf.fraction)
+                frame += stagger
             frame += finterval
 
         if t is not None and t.sendvfs:
             for vf in t.sendvfs:
-                vfgs[(vf.voterid, vf.candidatecode)].transfer(True, frame, finterval, 6, vf.fraction)
+                vfgs[(vf.voterid, vf.candidatecode)].transfer(True, frame, finterval, extractdur, vf.fraction)
+                frame += stagger
             frame += finterval
+
+        if pos.hasresult:
+            # Announce Result
+            frame += 0
 
         for locy, locz, candlist in [(0, 2, pos.winners), (0, 0, pos.active), (2, 0, pos.deactivated), (4, 0, pos.excluded)]:
             startposx = -(len(candlist) - 1) / 2
             for i, cand in enumerate(candlist):
                 buckgs[cand.code].move(frame, finterval, Location(startposx + i, locy, locz), cand.votes)
 
-        # for vid, waste in pos.waste.items():
-        #     vbgs[vid].animation_fill.append(FillKF(frame, waste))
-        #     vbgs[vid].animation_fill.append(FillKF(frame + finterval, waste))
-
-        frame += finterval
+        if pos.hasresult:
+            frame += finterval
 
     return list(buckgs.values()), list(vbgs.values()), list(vfgs.values()), frame  # Total frames
 
@@ -219,6 +231,6 @@ def build_from_shell(usegroups, reactivationmode):
 
 
 if __name__ == '__main__':
-    objs = build_from_shell()
+    objs = build_from_shell(True, True)
     for obj in objs:
         print(obj)
