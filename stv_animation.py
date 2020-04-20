@@ -31,17 +31,23 @@ def build_location_animation(obj, ref):
 
 
 def build_fill_animation(obj, ref):
-    for frame, fill in ref.animation_fill.items():
-        obj['Votes'] = float(fill)
+    lastframe = 0
+    lasthide = None
+    for frame in sorted(ref.animation_fill.keys()):
+        fill = float(ref.animation_fill[frame])
+        obj['Votes'] = fill
         obj.keyframe_insert(data_path='["Votes"]', frame=frame)
 
+        hide = fill < 0.0001
+        if lasthide is None or hide != lasthide:
+            hframe = frame - .25 if hide else lastframe + .25
+            obj.hide_viewport = hide
+            obj.keyframe_insert(data_path='hide_viewport', frame=hframe)
+            obj.hide_render = hide
+            obj.keyframe_insert(data_path='hide_render', frame=hframe)
 
-def build_hide_animation(obj, ref):
-    for frame, hide in ref.animation_hide.items():
-        obj.hide_viewport = hide
-        obj.keyframe_insert(data_path='hide_viewport', frame=frame)
-        obj.hide_render = hide
-        obj.keyframe_insert(data_path='hide_render', frame=frame)
+        lastframe = frame
+        lasthide = hide
 
 
 def build_bucket(buck: BucketG):
@@ -93,7 +99,6 @@ def build_bucket_fill(buck: BucketG):
     add_driver(obj, 'scale', 2, 'Votes', 'var')  # Add Fill Driver
 
     build_fill_animation(obj, buck)
-    build_hide_animation(obj, buck)
 
 
 def build_vb(vb: VoteBaseG):
@@ -113,7 +118,6 @@ def build_vb(vb: VoteBaseG):
     add_driver(obj, 'scale', 2, 'Votes', 'var')  # Add Drivers
 
     build_fill_animation(obj, vb)
-    build_hide_animation(obj, vb)
 
 
 def build_vf(vf: VoteFractionG):
@@ -126,7 +130,6 @@ def build_vf(vf: VoteFractionG):
 
     build_location_animation(obj, vf)
     build_fill_animation(obj, vf)
-    build_hide_animation(obj, vf)
 
 
 def create_materials():
