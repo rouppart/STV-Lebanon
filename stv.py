@@ -42,9 +42,14 @@ class STV:
         if uid in self.voters:
             raise Exception('Voter {} was already added'.format(uid))
         self.voters[uid] = newvoter = _Voter(uid)
+        addedcandidates = set()  # Used to check duplicate candidate code
         for ccode in candlist:
             try:
-                _VoteLink(newvoter, self.candidates[ccode])
+                if ccode not in addedcandidates:
+                    _VoteLink(newvoter, self.candidates[ccode])
+                    addedcandidates.add(ccode)
+                else:
+                    print('Warning: Voter {} already specified candidate {}. Ignoring'.format(uid, ccode))
             except KeyError:
                 raise Exception('Voter {} voted used an invalid Candidate Code ({})'.format(uid, ccode))
 
@@ -331,4 +336,4 @@ class _VoteLink:
         self.status = self.OPEN
 
     def __repr__(self):
-        return 'VoteLink({}, {}, {})'.format(self.voter, self.candidate, self.status)
+        return 'VoteLink({}, {}, {:.3f}, {})'.format(self.voter, self.candidate, self.weight, self.status)

@@ -1,13 +1,13 @@
 from collections import namedtuple
 
-Candidate = namedtuple('Candidate', ['code', 'name', 'group'])
-VoteLink = namedtuple('VoteLink', ['voterid', 'weight', 'candidatecode', 'status'])
+Candidate = namedtuple('Candidate', ['code', 'votes'])
+VoteFraction = namedtuple('VoteFraction', ['voterid', 'fraction', 'candidatecode', 'status'])
 
 
 class Position:
     def __init__(self, stv, status, previous_position=None):
         def tupelize_candidate_list(candlist):
-            return [Candidate(c.code, c.name, c.group) for c in candlist]
+            return [Candidate(c.code, c.votes) for c in candlist]
 
         self.round = stv.rounds
         self.subround = stv.subrounds
@@ -20,12 +20,14 @@ class Position:
         self.deactivated = tupelize_candidate_list(stv.deactivated)
         self.excluded = tupelize_candidate_list(stv.excluded)
 
-        self.votelinks = {}
+        self.votefractions = {}
+        self.waste = {}
         for voter in stv.voters.values():
             vid = voter.uid
+            self.waste[vid] = voter.waste
             for vl in voter.votelinks:
                 ccode = vl.candidate.code
-                self.votelinks[(vid, ccode)] = VoteLink(vid, vl.weight, ccode, vl.status)
+                self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vl.status)
 
         if status.winner is not None:
             self.message = 'Win:' + status.winner.name
@@ -47,21 +49,21 @@ class Position:
         previous.nexttransform = t = Transform()
         t.nextposition = self
 
-        for k, nvl in self.votelinks.items():
-            t.add_difference(previous.votelinks[k], nvl)
+        for k, nvf in self.votefractions.items():
+            t.add_difference(previous.votefractions[k], nvf)
 
 
 class Transform:
     def __init__(self):
         self.nextposition = None
-        self.returnvls = []
-        self.sendvls = []
+        self.returnvfs = []
+        self.sendvfs = []
 
-    def add_difference(self, previousvl, nextvl):
-        weightdiff = nextvl.weight - previousvl.weight
+    def add_difference(self, previousvl, nextvf):
+        weightdiff = nextvf.fraction - previousvl.fraction
         if weightdiff != 0:
-            vllist = self.sendvls if weightdiff > 0 else self.returnvls
-            vllist.append(VoteLink(nextvl.voterid, abs(weightdiff), nextvl.candidatecode, nextvl.status))
+            vflist = self.sendvfs if weightdiff > 0 else self.returnvfs
+            vflist.append(VoteFraction(nextvf.voterid, abs(weightdiff), nextvf.candidatecode, nextvf.status))
 
 
 class STVProgress:
@@ -75,7 +77,6 @@ class STVProgress:
 
                 if self.startpos is None:
                     self.startpos = newpos
-                    self.candidates = {c.code: c for c in newpos.active}
 
                 currentpos = newpos
 
@@ -99,8 +100,9 @@ def test_using_shell():
           '"n" for no reactivation')
     viewmode = input('Type any number of options: ')
 
-    stvp = STVProgress(setup('g' in viewmode, 'n' not in viewmode))
-    candidates = stvp.candidates
+    stv = setup('g' in viewmode, 'n' not in viewmode)
+    stvp = STVProgress(stv)
+    candidates = stv.candidates
 
     for t, pos in stvp.get_tansform_and_position():
         print('\n\nRound: {}.{}.{}'.format(pos.round, pos.subround, pos.loopcount))
@@ -108,15 +110,20 @@ def test_using_shell():
         print()
 
         if t is not None:
-            vlformat = '{0:<10}{3} {1:.2f} {3} {2}'
-            if t.returnvls:
+            vlformat = '{0:<12}{3} {1:.2f} {3} {2}'
+            if t.returnvfs:
                 print('Return Fractions')
-                for vl in t.returnvls:
-                    print(vlformat.format(vl.voterid, vl.weight, candidates[vl.candidatecode].name, '<'))
-            if t.sendvls:
+                for vf in t.returnvfs:
+                    print(vlformat.format(vf.voterid, vf.fraction, candidates[vf.candidatecode].name, '<'))
+            if t.sendvfs:
                 print('Send Fractions')
-                for vl in t.sendvls:
-                    print(vlformat.format(vl.voterid, vl.weight, candidates[vl.candidatecode].name, '>'))
+                for vf in t.sendvfs:
+                    print(vlformat.format(vf.voterid, vf.fraction, candidates[vf.candidatecode].name, '>'))
+
+        print('\nCandidates:')
+        for candlist, status in [(pos.winners, 'W'), (pos.active, 'A'), (pos.deactivated, 'D'), (pos.excluded, 'E')]:
+            for cand in candlist:
+                print('{:<20}{}  {:,.2f}'.format(candidates[cand.code].name, status, cand.votes))
 
 
 if __name__ == '__main__':
