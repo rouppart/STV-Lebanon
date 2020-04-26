@@ -5,16 +5,40 @@ VoteFraction = namedtuple('VoteFraction', ['voterid', 'fraction', 'candidatecode
 
 
 class Position:
-    def __init__(self, stv, status, previous_position=None):
+    # Loop Type
+    UNKNOWN = 0
+    REDUCTION = 1
+    ALLOCATION = 2
+    LOSS = 3
+    WIN = 4
+
+    def __init__(self, stv, status, previous_position):
         def tupelize_candidate_list(candlist):
             return [Candidate(c.code, c.votes) for c in candlist]
 
         self.round = stv.rounds
         self.subround = stv.subrounds
         self.loopcount = stv.loopcount
-        self.loopisallocation = stv.allocationcount > 0
-        self.loopisreduction = stv.reductioncount > 0
-        self.hasdecision = status.winner is not None or status.loser is not None
+
+        if status.winner is not None:
+            self.looptype = self.WIN
+            self.message = 'Win:' + status.winner.name
+        elif status.loser is not None:
+            self.looptype = self.LOSS
+            self.message = 'Loss:' + status.loser.name
+        elif stv.reductioncount > 0:
+            self.looptype = self.REDUCTION
+            self.message = 'Reductions: {}'.format(stv.reductioncount)
+        elif stv.allocationcount > 0:
+            self.looptype = self.ALLOCATION
+            self.message = 'Allocations: {}'.format(stv.allocationcount)
+        else:
+            self.looptype = self.UNKNOWN
+            self.message = 'Beginning'
+
+        self.excluded_group = status.excluded_by_group[0].group.name if status.excluded_by_group else None
+        if self.excluded_group:
+            self.message += '\nExclusion of group: ' + self.excluded_group
 
         self.winners = tupelize_candidate_list(stv.winners)
         self.active = tupelize_candidate_list(stv.active)
@@ -22,29 +46,24 @@ class Position:
         self.excluded = tupelize_candidate_list(stv.excluded)
 
         self.votefractions = {}
-        self.waste = {}
+        self.waste = {}  # Key is VoterID
         for voter in stv.voters.values():
             vid = voter.uid
             self.waste[vid] = voter.waste
             for vl in voter.votelinks:
                 ccode = vl.candidate.code
-                self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vl.status)
-
-        if status.winner is not None:
-            self.message = 'Win:' + status.winner.name
-        elif status.loser is not None:
-            self.message = 'Loss:' + status.loser.name
-        elif self.loopisallocation:
-            self.message = 'Allocations: {}'.format(stv.allocationcount)
-        elif self.loopisreduction:
-            self.message = 'Reductions: {}'.format(stv.reductioncount)
-        else:
-            self.message = 'Beginning'
+                vlstatuscode = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.OPEN: 'Open',
+                                vl.PARTIAL: 'Partial', vl.FULL: 'Full'}[vl.status]
+                self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vlstatuscode)
 
         self.nexttransform = None
 
         if previous_position is not None:
             self.add_previous(previous_position)
+
+    @property
+    def hasdecision(self):
+        return self.looptype >= self.LOSS
 
     def add_previous(self, previous):
         previous.nexttransform = t = Transform()

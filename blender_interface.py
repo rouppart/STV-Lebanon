@@ -4,10 +4,11 @@ from stv_progress import STVProgress
 
 
 Location = namedtuple('Location', ['x', 'y', 'z'])
+TextStrip = namedtuple('TextStrip', ['overlay', 'text', 'startframe', 'endframe', 'color'])
 
 
-def add_z_location(loc, z):
-    return Location(loc.x, loc.y, loc.z + z)
+def add_location(loc, x=0.0, y=0.0, z=0.0):
+    return Location(loc.x + x, loc.y + y, loc.z + z)
 
 
 def get_last_frame(adata, maxf):
@@ -18,8 +19,9 @@ def get_last_frame(adata, maxf):
 
 
 class BucketG:
-    def __init__(self, candidatecode, width, heightratio, votefillheightratio, border):
+    def __init__(self, candidatecode, candidatename, width, heightratio, votefillheightratio, border):
         self.candidatecode = candidatecode
+        self.candidatename = candidatename
         self.width = width
         self.heightratio = heightratio
         self.votefillheightratio = votefillheightratio
@@ -35,7 +37,7 @@ class BucketG:
 
     def get_last_fill_location(self, maxf=None):
         zoffset = self.border + self.fraction_to_height(self.get_last_votes(maxf))
-        return add_z_location(self.get_last_location(maxf), zoffset)
+        return add_location(self.get_last_location(maxf), z=zoffset)
 
     def move(self, frame, duration, tolocation, votes):
         if self.animation_location:
@@ -49,8 +51,8 @@ class BucketG:
 
 
 class VoteBaseG:
-    def __init__(self, voterid, width, heightratio, location):
-        self.voterid = voterid
+    def __init__(self, uid, width, heightratio, location):
+        self.uid = uid
         self.width = width
         self.heightratio = heightratio
         self.location = location
@@ -67,7 +69,7 @@ class VoteBaseG:
         return self.animation_fill[get_last_frame(self.animation_fill, maxf)]
 
     def get_last_fill_location(self, maxf=None):
-        return add_z_location(self.get_last_location(), self.fraction_to_height(self.get_last_votes(maxf)))
+        return add_location(self.get_last_location(), z=self.fraction_to_height(self.get_last_votes(maxf)))
 
 
 class VoteFractionG:
@@ -95,11 +97,11 @@ class VoteFractionG:
 
         startobj = self.vbase if issend else self.bucket
         start_loc = startobj.get_last_fill_location()
-        start_loc2 = add_z_location(start_loc, -startobj.fraction_to_height(fraction))
+        start_loc2 = add_location(start_loc, z=-startobj.fraction_to_height(fraction))
 
         endobj = self.bucket if issend else self.vbase
         end_loc = endobj.get_last_fill_location()
-        end_loc2 = add_z_location(end_loc, endobj.fraction_to_height(fraction))
+        end_loc2 = add_location(end_loc, z=endobj.fraction_to_height(fraction))
 
         self.extract(startf, endf, extractdur, fraction)
 
@@ -116,6 +118,27 @@ class VoteFractionG:
         self.animation_location[endf + 0.5] = end_loc2
 
 
+class TextOverLay:
+    def __init__(self, name, channel, xpos, ypos, xalign, yalign, size):
+        self.name = name
+        self.channel = channel
+        self.xpos = xpos
+        self.ypos = ypos
+        self.xalign = xalign
+        self.yalign = yalign
+        self.size = size
+        self.textstrips = []
+
+
+class STVBlender:
+    def __init__(self, buckets, votebases, votefractions, lastframe, textstrips):
+        self.buckets = list(buckets.values())
+        self.votebases = list(votebases.values())
+        self.votefractions = list(votefractions.values())
+        self.lastframe = lastframe
+        self.textstrips = textstrips
+
+
 def adjust_fill(objg: BucketG or VoteBaseG, frame, extractdur, fraction):
     fdata = objg.animation_fill
     startf = frame
@@ -129,7 +152,7 @@ def adjust_fill(objg: BucketG or VoteBaseG, frame, extractdur, fraction):
         fdata[startf] = fdata[prev_endf]
 
 
-def build(stv):
+def build(stv, viewid=None):
     stvp = STVProgress(stv)
 
     vfwidth = 0.05  # Cm
@@ -142,29 +165,38 @@ def build(stv):
     buckgs = {}
     vbgs = {}
     vfgs = {}
+    vtrackers = {}
+    textstrips = []
+    overlay_round = TextOverLay('Rounds', 2, 0, 1, 'LEFT', 'TOP', 50)
+    overlay_looptype = TextOverLay('Message', 3, 0.5, 1, 'CENTER', 'TOP', 50)
+    overlay_comment = TextOverLay('Comment', 4, 1, 1, 'RIGHT', 'TOP', 30)
+    overlay_tracking = TextOverLay('Tracking', 5, 1, 0, 'RIGHT', 'BOTTOM', 30)
 
     # Build buckets and fill
     for cand in stv.candidates.values():
-        buckgs[cand.code] = BucketG(cand.code, bucketwidth, bucketheightratio, votefillheightratio, bucketwidth / 20)
+        buckgs[cand.code] = BucketG(cand.code, cand.name, bucketwidth, bucketheightratio,
+                                    votefillheightratio, bucketwidth / 15)
 
     # Build Vote Base
+    viewvoter = stv.voters.get(viewid)
+    voterlist = sorted(stv.voters.values(), key=lambda v: 1 if v is viewvoter else 0)
     voterspacing = 0.5
     gridwidth_units = ceil(sqrt(votercount * 2))
     votersstartlocx = -(gridwidth_units - 1) * voterspacing / 2
     votersstartlocy = -2
     votersstartlocz = 0
-    for i, voter in enumerate(stv.voters.values()):
+    for i, voter in enumerate(voterlist):
         dx = i % gridwidth_units * voterspacing
         dy = i // gridwidth_units * -voterspacing
         dz = i // gridwidth_units * voterspacing / 2
         location = Location(votersstartlocx + dx, votersstartlocy + dy, votersstartlocz + dz)
         vbgs[voter.uid] = VoteBaseG(voter.uid, vfwidth, stv.totalseats, location)
 
-    # Build voters
-    for voter in stv.voters.values():
+    # Build votefractions
+    for voter in voterlist:
         vbase = vbgs[voter.uid]
-        for vf in voter.votelinks:
-            candcode = vf.candidate.code
+        for vl in voter.votelinks:
+            candcode = vl.candidate.code
             vfgs[(voter.uid, candcode)] = VoteFractionG(voter.uid, buckgs[candcode], vbase, vfwidth, stv.totalseats,
                                                         vbase.location)
 
@@ -174,7 +206,8 @@ def build(stv):
     extractdur = 6
     stagger = 0
     for t, pos in stvp.get_tansform_and_position():
-        if pos.loopisreduction:
+        looproundstartf = frame
+        if pos.looptype == pos.REDUCTION:
             frame += 15
 
         if t is not None and t.returnvfs:
@@ -190,30 +223,61 @@ def build(stv):
             frame += finterval
 
         if pos.hasdecision:
-            # Announce Result
-            frame += 0
-
+            frame += finterval
         for locy, locz, candlist in [(0, 2, pos.winners), (0, 0, pos.active), (2, 0, pos.deactivated), (4, 0, pos.excluded)]:
-            startposx = -(len(candlist) - 1) / 2
+            xunits = len(candlist) if candlist is not pos.winners else stv.totalseats
+            startposx = -(xunits - 1) / 2
             for i, cand in enumerate(candlist):
                 buckgs[cand.code].move(frame, finterval, Location(startposx + i, locy, locz), cand.votes)
         if pos.hasdecision:
             frame += finterval * 2
 
-    return list(buckgs.values()), list(vbgs.values()), list(vfgs.values()), frame  # Total frames
+        # Create Overlays
+        if frame > looproundstartf:
+            white = (1, 1, 1, 1)
+            # Round
+            text = 'Round: {}.{}'.format(pos.round, pos.subround)
+            textstrips.append(TextStrip(overlay_round, text, looproundstartf, frame, white))
+
+            # Loop Type
+            looptype_trans = {
+                pos.WIN: ('Win', (0.1, 1, 0.1, 1)),  # Green
+                pos.LOSS: ('Loss', (1, 0, 0, 1)),  # Red
+                pos.REDUCTION: ('Reduction', (1, 1, 0, 1)),  # Yello
+                pos.ALLOCATION: ('Allocation', (0.2, 0.2, 1, 1)),  # Blue
+                pos.UNKNOWN: ('Beginning', white)  # White
+            }[pos.looptype]
+            textstrips.append(TextStrip(overlay_looptype, looptype_trans[0], looproundstartf, frame, looptype_trans[1]))
+
+            # Comments
+            if pos.excluded_group is not None:
+                comment = 'Exclusion of group: ' + pos.excluded_group
+                textstrips.append(TextStrip(overlay_comment, comment, looproundstartf, frame, white))
+
+            if viewvoter is not None:
+                text = "{}'s ballot".format(viewid)
+                lineformat = '\n{:16} {:>4.0%}'
+                for vl in viewvoter.votelinks:
+                    candcode = vl.candidate.code
+                    vf = pos.votefractions[(viewid, candcode)]
+                    text += lineformat.format(vl.candidate.name[:16], vf.fraction)
+                text += lineformat.format('Waste', pos.waste[viewid])
+                textstrips.append(TextStrip(overlay_tracking, text, looproundstartf, frame, white))
+
+    return STVBlender(buckgs, vbgs, vfgs, frame, textstrips)  # Total frames
 
 
-def build_from_shell(usegroups, reactivationmode):
+def build_from_shell(usegroups, reactivationmode, viewvoter=None):
     try:
         from shell_interface import setup
     except ImportError:
         print('Could not import Shell Interface\nExiting')
         return
 
-    return build(setup(usegroups, reactivationmode))
+    return build(setup(usegroups, reactivationmode), viewvoter)
 
 
 if __name__ == '__main__':
-    objs = build_from_shell(True, True)
-    for obj in objs:
+    stvb = build_from_shell(True, True)
+    for obj in stvb.buckets + stvb.votebases + stvb.votefractions + stvb.textstrips:
         print(obj)

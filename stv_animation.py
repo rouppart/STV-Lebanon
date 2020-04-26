@@ -1,3 +1,4 @@
+from math import pi
 import bpy
 import bmesh
 
@@ -101,8 +102,30 @@ def build_bucket_fill(buck: BucketG):
     build_fill_animation(obj, buck)
 
 
+def build_bucket_sign(buck: BucketG):
+    location = (0, buck.width / 2 + buck.border, buck.width * buck.heightratio + 0.15)
+    bpy.ops.object.text_add(radius=0.18, location=location, rotation=(pi/2, 0, 0))
+    obj = bpy.context.object  # Assign Object
+    obj.name = 'Bucket Sign ' + buck.candidatecode
+    text = obj.data
+    text.name = obj.name
+    text.body = buck.candidatename.replace(' ', '\n')
+    text.align_x = 'CENTER'
+    text.align_y = 'BOTTOM'
+    text.resolution_u = 8
+    text.extrude = 0.005
+    bpy.context.object.data.bevel_depth = 0.002
+    bpy.context.object.data.bevel_resolution = 1
+
+    obj.data.materials.append(bpy.data.materials['Text Material'])
+
+    bpy.data.collections['Collection'].objects.unlink(obj)
+    bpy.data.collections['Bucket Signs'].objects.link(obj)  # Move to collections
+    obj.parent = bpy.data.objects['Bucket ' + buck.candidatecode]
+
+
 def build_vb(vb: VoteBaseG):
-    objname = 'VB ' + vb.voterid
+    objname = 'VB ' + vb.uid
     if 'VB' not in bpy.data.meshes:
         obj = build_first_mesh('VB', vb.width, vb.heightratio, 0, 'Vote Material')
         obj.name = objname
@@ -132,6 +155,54 @@ def build_vf(vf: VoteFractionG):
     build_fill_animation(obj, vf)
 
 
+def build_tracking(tracking):
+    bpy.ops.mesh.primitive_plane_add(size=tracking.spacing)
+    obj = bpy.context.object
+    obj.name = 'Tracking Board'
+    obj.data.name = 'Tracking Board'
+    obj.data.materials.append(bpy.data.materials['Board Material'])
+
+    horizontalscale = 4
+    candcount = len(tracking.candidatenames)
+    obj.scale[0] = horizontalscale
+    obj.scale[1] = candcount
+    obj.location[0] = tracking.spacing * (horizontalscale / 2 - 0.5)
+    obj.location[1] = -tracking.spacing * (candcount / 2 - 0.5)
+    bpy.ops.object.transform_apply(location=True, scale=True)
+
+    obj.location = tracking.viewbase.location
+
+    bpy.ops.object.modifier_add(type='SOLIDIFY')
+    obj.modifiers['Solidify'].offset = -1
+    obj.modifiers['Solidify'].thickness = 0.02
+    obj.modifiers['Solidify'].use_even_offset = True
+    bpy.ops.object.modifier_apply(modifier='Solidify')
+
+    bpy.ops.object.modifier_add(type='BEVEL')
+    obj.modifiers['Bevel'].width = 0.003
+    bpy.ops.object.modifier_apply(modifier='Bevel')
+
+    bpy.data.collections['Collection'].objects.unlink(obj)
+    bpy.data.collections['Vote Bases'].objects.link(obj)  # Move to collections
+
+    for i, name in enumerate(tracking.candidatenames):
+        location = (tracking.spacing * 0.5, -tracking.spacing * i, 0)
+        bpy.ops.object.text_add(radius=0.08, location=location)
+        tobj = bpy.context.object  # Assign Object
+        tobj.name = 'Tracker Candidate ' + name
+        text = tobj.data
+        text.name = tobj.name
+        text.body = name
+        text.resolution_u = 8
+        text.extrude = 0.002
+
+        tobj.data.materials.append(bpy.data.materials['Text Material'])
+
+        bpy.data.collections['Collection'].objects.unlink(tobj)
+        bpy.data.collections['Vote Bases'].objects.link(tobj)  # Move to collections
+        tobj.parent = obj
+
+
 def create_materials():
     # Vote Material
     mat = bpy.data.materials['Material']
@@ -147,10 +218,20 @@ def create_materials():
     nodes = mat.node_tree.nodes
     nodes.remove(nodes.get('Principled BSDF'))
     newnode = nodes.new('ShaderNodeBsdfGlass')
-    newnode.inputs['Color'].default_value = (.7, .9, 1, 1)
+    newnode.inputs['Color'].default_value = (0.7, 0.9, 1, 1)
     newnode.inputs['Roughness'].default_value = 0.25
     newnode.inputs['IOR'].default_value = 1
     mat.node_tree.links.new(nodes[0].inputs[0], newnode.outputs[0])
+
+    # Text Material
+    mat = bpy.data.materials.new('Text Material')
+    mat.diffuse_color = (0.05, 0.05, 0.05, 1)
+    mat.roughness = 0.9
+
+    # Board Material
+    mat = bpy.data.materials.new('Board Material')
+    mat.diffuse_color = (0.5, 0.5, 0.6, 1)
+    mat.roughness = 1
 
 
 def main():
@@ -159,37 +240,67 @@ def main():
 
     collection = bpy.data.collections.new('Buckets')
     bpy.context.scene.collection.children.link(collection)
+    collection = bpy.data.collections.new('Bucket Signs')
+    bpy.data.collections['Buckets'].children.link(collection)
     collection = bpy.data.collections.new('Vote Bases')
     bpy.context.scene.collection.children.link(collection)
     collection = bpy.data.collections.new('Vote Fractions')
     bpy.context.scene.collection.children.link(collection)
 
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0.15, 0.15, 0.15, 1)
+
     create_materials()
 
-    buckets, votebases, votefractions, totalframes = build_from_shell(True, True)
-    for bucket in buckets:
+    stvblender = build_from_shell(True, True, 'rami')
+    for bucket in stvblender.buckets:
         build_bucket(bucket)
         build_bucket_fill(bucket)
+        build_bucket_sign(bucket)
 
-    for vb in votebases:
+    for vb in stvblender.votebases:
         build_vb(vb)
 
-    for vf in votefractions:
+    for vf in stvblender.votefractions:
         build_vf(vf)
 
     cam = bpy.data.objects['Camera']
     cam.location = [0, -9, 5]
-    cam.rotation_euler = [1, 0, 0]
+    cam.rotation_euler = [1.1, 0, 0]
     cam.data.lens = 25
 
     scene = bpy.context.scene
+    scene.render.use_freestyle = True
+    lineset = bpy.context.scene.view_layers["View Layer"].freestyle_settings.linesets["LineSet"]
+    lineset.select_by_collection = True
+    lineset.collection = bpy.data.collections["Bucket Signs"]
+    lineset.collection_negation = 'EXCLUSIVE'  # Exclude Sign from freestyle
+    scene.render.line_thickness = 0.5
     scene.eevee.use_ssr = True
     scene.eevee.use_ssr_refraction = True
     scene.eevee.use_ssr_halfres = False
     scene.render.resolution_percentage = 75
     scene.render.fps = 30
     scene.render.filepath = "/home/robert/Desktop/STV/"
-    scene.frame_end = totalframes + 24
+    scene.frame_end = stvblender.lastframe + 24
+
+    bpy.ops.scene.new(type='EMPTY')
+    scene = bpy.context.scene
+    scene.name = 'Scene with Text'
+    scene.sequence_editor_create()
+    sequences = scene.sequence_editor.sequences
+    sequences.new_scene('Main Animation', bpy.data.scenes['Scene'], 1, 1)
+
+    for ts in stvblender.textstrips:
+        ov = ts.overlay
+        seq = sequences.new_effect(ov.name + ' Overlay', 'TEXT', ov.channel, ts.startframe, frame_end=ts.endframe)
+        seq.location = (ov.xpos, ov.ypos)
+        seq.align_x = ov.xalign
+        seq.align_y = ov.yalign
+        seq.font_size = ov.size
+        seq.text = ts.text
+        seq.color = ts.color
+        seq.use_shadow = True
+        seq.blend_type = 'ALPHA_OVER'
 
 
 if __name__ == '__main__':

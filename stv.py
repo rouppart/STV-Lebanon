@@ -29,24 +29,24 @@ class STV:
     def add_group(self, name, seats):
         if name in self.groups:
             raise Exception('Group {} was already added'.format(name))
-        self.groups[name] = _Group(name, seats)
+        self.groups[name] = Group(name, seats)
         self.totalseats += seats
 
     def add_candidate(self, code, name, groupname):
         if code in self.candidates:
             raise Exception('Candidate {} was already added'.format(code))
-        self.candidates[code] = candidate = _Candidate(code, name, self.groups[groupname])
+        self.candidates[code] = candidate = Candidate(code, name, self.groups[groupname])
         self.active.append(candidate)  # Put all Candidates in the active list
 
     def add_voter(self, uid, candlist):
         if uid in self.voters:
             raise Exception('Voter {} was already added'.format(uid))
-        self.voters[uid] = newvoter = _Voter(uid)
+        self.voters[uid] = newvoter = Voter(uid)
         addedcandidates = set()  # Used to check duplicate candidate code
         for ccode in candlist:
             try:
                 if ccode not in addedcandidates:
-                    _VoteLink(newvoter, self.candidates[ccode])
+                    VoteLink(newvoter, self.candidates[ccode])
                     addedcandidates.add(ccode)
                 else:
                     print('Warning: Voter {} already specified candidate {}. Ignoring'.format(uid, ccode))
@@ -116,7 +116,7 @@ class STV:
                 # Register at which vote amount the winner won in case he won below the quota
                 topcandidate.wonatquota = self.quota if topcandidate.votes > self.quota else topcandidate.votes
                 # Status set to PARTIAL and let Candidate's Reduce function decide if FULL
-                self._process_candidate(topcandidate, self.active, self.winners, _VoteLink.PARTIAL, False)
+                self._process_candidate(topcandidate, self.active, self.winners, VoteLink.PARTIAL, False)
                 topcandidate.doreduction = True
 
                 # Update status
@@ -131,7 +131,7 @@ class STV:
                     for c in self.active + self.deactivated:
                         if c.group == wgroup:
                             fromlist = self.active if c in self.active else self.deactivated
-                            self._process_candidate(c, fromlist, self.excluded, _VoteLink.EXCLUDED, True)
+                            self._process_candidate(c, fromlist, self.excluded, VoteLink.EXCLUDED, True)
                             decstatus.excluded_by_group.append(c)
 
                 if len(self.winners) == self.totalseats:  # Finish and exit loop
@@ -145,7 +145,7 @@ class STV:
             else:  # Lose
                 # Remove last active candidate
                 roundloser = self.active[-1]
-                self._process_candidate(roundloser, self.active, self.deactivated, _VoteLink.DEACTIVATED, True)
+                self._process_candidate(roundloser, self.active, self.deactivated, VoteLink.DEACTIVATED, True)
                 decstatus.loser = roundloser
 
             # If there are not enough active candidates, reactivate some.
@@ -173,7 +173,7 @@ class STV:
         """ Reactivates deactivated Candidates """
         reactivated = []
         for c in self.deactivated[::-1]:
-            self._process_candidate(c, self.deactivated, self.active, _VoteLink.OPEN, True)
+            self._process_candidate(c, self.deactivated, self.active, VoteLink.OPEN, True)
             reactivated.append(c)
 
             # If limit is set return the specified amount instead of all deactivated
@@ -201,7 +201,7 @@ class STVStatus:
         self.reactivated = None
 
 
-class _Group:
+class Group:
     def __init__(self, name, seats):
         self.name = name
         self.seats = seats
@@ -212,7 +212,7 @@ class _Group:
         return self.seatswon >= self.seats
 
 
-class _Candidate:
+class Candidate:
     def __init__(self, code, name, group):
         self.code = code
         self.name = name
@@ -281,7 +281,7 @@ class _Candidate:
                 vl.voter.dorefreshwaste = True  # Have to recalculate waste
 
 
-class _Voter:
+class Voter:
     def __init__(self, uid):
         self.uid = uid
         self.votelinks = []  # Links to candidate in order of preference
@@ -329,7 +329,7 @@ class _Voter:
         self._waste = total
 
 
-class _VoteLink:
+class VoteLink:
     EXCLUDED = -2  # Permanent Lost support
     DEACTIVATED = -1  # Temporary Lost support
     OPEN = 0  # Open support
