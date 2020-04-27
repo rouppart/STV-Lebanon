@@ -77,6 +77,7 @@ def build_bucket(buck: BucketG):
         obj = bpy.data.objects.new(objname, bpy.data.meshes['Bucket'])
 
     bpy.data.collections['Buckets'].objects.link(obj)  # Move to collections
+    bpy.data.collections['Freestyle'].objects.link(obj)
 
     build_location_animation(obj, buck)
 
@@ -120,7 +121,7 @@ def build_bucket_sign(buck: BucketG):
     obj.data.materials.append(bpy.data.materials['Text Material'])
 
     bpy.data.collections['Collection'].objects.unlink(obj)
-    bpy.data.collections['Bucket Signs'].objects.link(obj)  # Move to collections
+    bpy.data.collections['Buckets'].objects.link(obj)  # Move to collections
     obj.parent = bpy.data.objects['Bucket ' + buck.candidatecode]
 
 
@@ -155,22 +156,13 @@ def build_vf(vf: VoteFractionG):
     build_fill_animation(obj, vf)
 
 
-def build_tracking(tracking):
-    bpy.ops.mesh.primitive_plane_add(size=tracking.spacing)
+def build_tracking(viewbase: VoteBaseG):
+    bpy.ops.mesh.primitive_plane_add(size=viewbase.width * 3)
     obj = bpy.context.object
     obj.name = 'Tracking Board'
     obj.data.name = 'Tracking Board'
     obj.data.materials.append(bpy.data.materials['Board Material'])
-
-    horizontalscale = 4
-    candcount = len(tracking.candidatenames)
-    obj.scale[0] = horizontalscale
-    obj.scale[1] = candcount
-    obj.location[0] = tracking.spacing * (horizontalscale / 2 - 0.5)
-    obj.location[1] = -tracking.spacing * (candcount / 2 - 0.5)
-    bpy.ops.object.transform_apply(location=True, scale=True)
-
-    obj.location = tracking.viewbase.location
+    obj.location = viewbase.location
 
     bpy.ops.object.modifier_add(type='SOLIDIFY')
     obj.modifiers['Solidify'].offset = -1
@@ -184,23 +176,6 @@ def build_tracking(tracking):
 
     bpy.data.collections['Collection'].objects.unlink(obj)
     bpy.data.collections['Vote Bases'].objects.link(obj)  # Move to collections
-
-    for i, name in enumerate(tracking.candidatenames):
-        location = (tracking.spacing * 0.5, -tracking.spacing * i, 0)
-        bpy.ops.object.text_add(radius=0.08, location=location)
-        tobj = bpy.context.object  # Assign Object
-        tobj.name = 'Tracker Candidate ' + name
-        text = tobj.data
-        text.name = tobj.name
-        text.body = name
-        text.resolution_u = 8
-        text.extrude = 0.002
-
-        tobj.data.materials.append(bpy.data.materials['Text Material'])
-
-        bpy.data.collections['Collection'].objects.unlink(tobj)
-        bpy.data.collections['Vote Bases'].objects.link(tobj)  # Move to collections
-        tobj.parent = obj
 
 
 def create_materials():
@@ -230,28 +205,28 @@ def create_materials():
 
     # Board Material
     mat = bpy.data.materials.new('Board Material')
-    mat.diffuse_color = (0.5, 0.5, 0.6, 1)
-    mat.roughness = 1
+    mat.diffuse_color = (0.2, 0.2, 0.2, 1)
+    mat.roughness = 0.8
 
 
-def main():
+def main(usegroups, reactivationmode, viewid):
     bpy.data.objects['Cube'].select_set(True)
     bpy.ops.object.delete()
 
     collection = bpy.data.collections.new('Buckets')
     bpy.context.scene.collection.children.link(collection)
-    collection = bpy.data.collections.new('Bucket Signs')
-    bpy.data.collections['Buckets'].children.link(collection)
     collection = bpy.data.collections.new('Vote Bases')
     bpy.context.scene.collection.children.link(collection)
     collection = bpy.data.collections.new('Vote Fractions')
     bpy.context.scene.collection.children.link(collection)
+    collection = bpy.data.collections.new('Freestyle')
+    bpy.context.scene.collection.children.link(collection)
 
-    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0.15, 0.15, 0.15, 1)
+    bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value = (0.9, 0.9, 0.9, 1)
 
     create_materials()
 
-    stvblender = build_from_shell(True, True, 'rami')
+    stvblender = build_from_shell(usegroups, reactivationmode, viewid)
     for bucket in stvblender.buckets:
         build_bucket(bucket)
         build_bucket_fill(bucket)
@@ -259,6 +234,8 @@ def main():
 
     for vb in stvblender.votebases:
         build_vb(vb)
+        if vb.uid == viewid:
+            build_tracking(vb)
 
     for vf in stvblender.votefractions:
         build_vf(vf)
@@ -272,8 +249,8 @@ def main():
     scene.render.use_freestyle = True
     lineset = bpy.context.scene.view_layers["View Layer"].freestyle_settings.linesets["LineSet"]
     lineset.select_by_collection = True
-    lineset.collection = bpy.data.collections["Bucket Signs"]
-    lineset.collection_negation = 'EXCLUSIVE'  # Exclude Sign from freestyle
+    lineset.collection = bpy.data.collections['Freestyle']
+    lineset.collection_negation = 'INCLUSIVE'  # Exclude Sign from freestyle
     scene.render.line_thickness = 0.5
     scene.eevee.use_ssr = True
     scene.eevee.use_ssr_refraction = True
@@ -304,4 +281,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(True, True, 'rami')
