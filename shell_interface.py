@@ -70,9 +70,9 @@ def setup(usegroups, reactivationmode):
 
     # Fill Objects
     with open('Area.csv', 'r') as f:
-        areaname, groups = f.readline().strip().split(',')
+        areaname, groups = f.readline().strip().split(';')
         stv = STV(areaname, usegroups, reactivationmode)
-        for group in groups.split(';'):
+        for group in groups.split(','):
             groupname, seats = group.split(':')
             stv.add_group(groupname, int(seats))
 
@@ -83,8 +83,8 @@ def setup(usegroups, reactivationmode):
 
     with open('Votes.csv', 'r') as f:
         for line in f:
-            uid, votes = line.strip().split(',')
-            stv.add_voter(uid, votes)
+            uid, ballot = line.strip().split(':')
+            stv.add_voter(uid, ballot.split(','))
 
     return stv
 

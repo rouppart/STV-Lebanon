@@ -281,4 +281,4 @@ def main(usegroups, reactivationmode, viewid):
 
 
 if __name__ == '__main__':
-    main(True, True, 'rami')
+    main(True, True, 'independent')
