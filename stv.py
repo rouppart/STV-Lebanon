@@ -81,9 +81,9 @@ class STV:
             # Part 1: General Redistribution of votes
             loopstatus = STVStatus(STVStatus.LOOP)
 
-            repeatreduce = True
-            while repeatreduce:  # Main Loop
-                repeatreduce = False
+            repeatmainloop = True
+            while repeatmainloop:  # Main Loop
+                repeatmainloop = False
                 self.loopcount += 1
 
                 for voter in self.voters.values():  # Allocation Loop
@@ -96,7 +96,7 @@ class STV:
 
                 for winner in self.winners:  # Reduction Loop
                     if winner.doreduction:  # If candidate received surplus votes allocate_votes above
-                        repeatreduce = True  # Repeat Main loop
+                        repeatmainloop = True  # Repeat Main loop
                         winner.reduce()  # Return surplus votes to voters and trigger doallocate
                         self.reductioncount += 1
                 if self.reductioncount > 0:
@@ -252,7 +252,7 @@ class Candidate:
         for vl in self.votelinks:
             if vl.status == vl.FULL:
                 fullvls.append(vl)
-            elif vl.status == vl.PARTIAL:
+            elif vl.status == vl.PARTIAL and vl.weight > 0:
                 partialvls.append(vl)
         partialvls.sort(key=lambda x: x.weight)
 
@@ -322,7 +322,6 @@ class Voter:
                     vl.candidate.dorefreshvotes = True
                     # New available support to previous winner
                     if vl.candidate.wonatquota > 0:
-                        vl.status = vl.PARTIAL
                         vl.candidate.doreduction = True
                     break
 

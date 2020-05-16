@@ -257,8 +257,8 @@ def main(usegroups, reactivationmode, viewid):
     scene.eevee.use_ssr_halfres = False
     scene.render.resolution_percentage = 75
     scene.render.fps = 30
-    scene.render.filepath = "/home/robert/Desktop/STV/"
-    scene.frame_end = stvblender.lastframe + 24
+    scene.render.filepath = "/home/robert/3D/STV/Renders/"
+    scene.frame_end = stvblender.lastframe + 150
 
     bpy.ops.scene.new(type='EMPTY')
     scene = bpy.context.scene
