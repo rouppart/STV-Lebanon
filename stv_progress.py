@@ -52,7 +52,7 @@ class Position:
             self.waste[vid] = voter.waste
             for vl in voter.votelinks:
                 ccode = vl.candidate.code
-                vlstatuscode = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.OPEN: 'Open',
+                vlstatuscode = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.ACTIVE: 'Active',
                                 vl.PARTIAL: 'Partial', vl.FULL: 'Full'}[vl.status]
                 self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vlstatuscode)
 

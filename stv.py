@@ -173,7 +173,7 @@ class STV:
         """ Reactivates deactivated Candidates """
         reactivated = []
         for c in self.deactivated[::-1]:
-            self._process_candidate(c, self.deactivated, self.active, VoteLink.OPEN, True)
+            self._process_candidate(c, self.deactivated, self.active, VoteLink.ACTIVE, True)
             reactivated.append(c)
 
             # If limit is set return the specified amount instead of all deactivated
@@ -260,22 +260,24 @@ class Candidate:
         partialcount = 0
         partialweight = 0
         for vl in partialvls + fullvls:
-            fullsupportweight = (self.wonatquota - partialweight) / (totalsupporters - partialcount)
-            # As loop progress, the fullsupportweight will increase than stabilize when supporters are able to
+            threshold = (self.wonatquota - partialweight) / (totalsupporters - partialcount)
+            # Threshold is the weight at which a VoteLink can qualify as FULL and the weight at which FULL support
+            # will be reduced.
+            # As loop progresses, the threshold will increase than stabilize when supporters are able to
             # become full supporters
             if vl.status == vl.PARTIAL:
-                if vl.weight < fullsupportweight:
+                if vl.weight < threshold:
                     # Phase 1. partial supporters who cannot give full support
                     partialcount += 1
                     partialweight += vl.weight
-                    # This will increase  the fullsupportweight on next iteration
+                    # This will increase  the threshold on next iteration
                 else:
                     # Phase 2. partial supporter can now fully support candidate
                     vl.status = vl.FULL
 
             # Reduce full support weight for old and new full supporters
             if vl.status == vl.FULL:
-                vl.weight = fullsupportweight
+                vl.weight = threshold
                 self.dorefreshvotes = True  # Have to recalculate weight
                 vl.voter.doallocate = True
                 vl.voter.dorefreshwaste = True  # Have to recalculate waste
@@ -313,10 +315,10 @@ class Voter:
                 vl.weight = 0
                 vl.candidate.dorefreshvotes = True
 
-        # Spread unfixed weight to first Open or Partial votelinks
+        # Spread unfixed weight to first Active or Partial votelinks
         if total > 0.005:  # Due to floating point inaccuracy dont compare to 0
             for vl in self.votelinks:
-                if vl.status in [vl.OPEN, vl.PARTIAL]:
+                if vl.status in [vl.ACTIVE, vl.PARTIAL]:
                     vl.weight += total
                     total = 0
                     vl.candidate.dorefreshvotes = True
@@ -331,7 +333,7 @@ class Voter:
 class VoteLink:
     EXCLUDED = -2  # Permanent Lost support
     DEACTIVATED = -1  # Temporary Lost support
-    OPEN = 0  # Open support
+    ACTIVE = 0  # Active support
     PARTIAL = 1  # Partial support
     FULL = 2  # Full support
 
@@ -343,7 +345,7 @@ class VoteLink:
         self.voter.votelinks.append(self)
         self.candidate.votelinks.append(self)
 
-        self.status = self.OPEN
+        self.status = self.ACTIVE
 
     def __repr__(self):
         return 'VoteLink({}, {}, {:.3f}, {})'.format(self.voter, self.candidate, self.weight, self.status)

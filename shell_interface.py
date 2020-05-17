@@ -103,7 +103,7 @@ def print_lists(stv, voterid):
         voter = stv.voters[voterid]
         print('\n' + voter.uid, 'list:')
         for vl in voter.votelinks:
-            statusdescription = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.OPEN: 'Open',
+            statusdescription = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.ACTIVE: 'Active',
                                  vl.PARTIAL: 'Partial', vl.FULL: 'Full'}[vl.status]
             print(formatname(vl.candidate.name), formatratio(vl.weight), '\t' + statusdescription)
         print(formatname('Waste'), formatratio(voter.waste))
