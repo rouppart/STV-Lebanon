@@ -62,7 +62,6 @@ def main():
                 for group in stv.groups.values():
                     print(group.name, group.seatswon, '/', group.seats)
                 print('Waste Percentage:', formatratio(stv.totalwaste / len(stv.voters)))
-                input('\nPress any key to exit...')
 
 
 def setup(usegroups, reactivationmode):
@@ -70,21 +69,34 @@ def setup(usegroups, reactivationmode):
 
     # Fill Objects
     with open('Area.csv', 'r') as f:
-        areaname, groups = f.readline().strip().split(';')
-        stv = STV(areaname, usegroups, reactivationmode)
-        for group in groups.split(','):
-            groupname, seats = group.split(':')
-            stv.add_group(groupname, int(seats))
+        try:
+            areaname, groups = f.readline().strip().split(';')
+            stv = STV(areaname, usegroups, reactivationmode)
+            for group in groups.split(','):
+                groupname, seats = group.split(':')
+                stv.add_group(groupname, int(seats))
+        except ValueError:
+            raise Exception('Setup Error: Could not decode area')
 
     with open('Candidates.csv', 'r') as f:
-        for line in f:
-            uid, name, groupname = line.strip().split(',')
-            stv.add_candidate(uid, name, groupname)
+        for i, line in enumerate(f, start=1):
+            line = line.strip()
+            if line:  # Skip empty lines
+                try:
+                    uid, name, groupname = line.split(',')
+                    stv.add_candidate(uid, name, groupname)
+                except ValueError:
+                    print('Setup Warning: Could not decode candidate at line', i)
 
     with open('Votes.csv', 'r') as f:
-        for line in f:
-            uid, ballot = line.strip().split(':')
-            stv.add_voter(uid, ballot.split(','))
+        for i, line in enumerate(f, start=1):
+            line = line.strip()
+            if line:
+                try:
+                    uid, ballot = line.split(':')
+                    stv.add_voter(uid, ballot.split(','))
+                except ValueError:
+                    print('Setup Warning: Could not decode voter at line', i)
 
     return stv
 
@@ -124,4 +136,8 @@ def formatratio(v):
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(e)
+    input('\nPress any key to exit...')

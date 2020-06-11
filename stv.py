@@ -49,9 +49,9 @@ class STV:
                     VoteLink(newvoter, self.candidates[ccode])
                     addedcandidates.add(ccode)
                 else:
-                    print('Warning: Voter {} already specified candidate {}. Ignoring'.format(uid, ccode))
+                    print('Warning: Voter {} already specified candidate ({}). Ignoring'.format(uid, ccode))
             except KeyError:
-                raise Exception('Voter {} voted used an invalid Candidate Code ({})'.format(uid, ccode))
+                print('Warning: Voter {} voted used an invalid Candidate Code ({}). Ignoring'.format(uid, ccode))
 
     @property
     def quota(self):
