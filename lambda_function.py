@@ -26,7 +26,9 @@ def pos_to_json(pos):
 
 def lambda_handler(event, context):
     try:
-        area = event['area']
+        usegroups = event['usegroups']
+        ractivation = event['reactivation']
+        groups = event['groups']
         candidates = event['candidates']
         votes = event['votes']
     except KeyError:
@@ -35,15 +37,15 @@ def lambda_handler(event, context):
     if len(candidates) > CANDIDATE_LIMIT:
         return get_error('Function limited to {} candidates'.format(CANDIDATE_LIMIT))
 
-    stv = STV(area['name'], True, True)
-    for groupname, seats in area['groups'].items():
-        stv.add_group(groupname, seats)
+    stv = STV(True, True)
+    for group in groups:
+        stv.add_group(group['name'], group['seats'])
 
-    for candcode, cand in candidates.items():
-        stv.add_candidate(candcode, cand['name'], cand['group'])
+    for candidate in candidates:
+        stv.add_candidate(candidate['code'], candidate['name'], candidate['group'])
 
-    for voterid, candlist in votes.items():
-        stv.add_voter(voterid, candlist)
+    for vote in votes:
+        stv.add_voter(vote['voterid'], vote['ballot'])
 
     stvp = STVProgress(stv)
     result = []

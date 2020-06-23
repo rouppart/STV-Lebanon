@@ -19,7 +19,7 @@ def main():
 
     stv = setup('g' in viewoptions, 'n' not in viewoptions)
 
-    print('\nArea:', stv.areaname, '  Seats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
+    print('\nSeats:', stv.totalseats, '\nTotal Votes:', len(stv.voters),
           '  Quota:', formatvote(stv.quota), '\n')
     
     for status in stv.start():
@@ -68,15 +68,14 @@ def setup(usegroups, reactivationmode):
     """ Import from local files, create and return STV instance """
 
     # Fill Objects
-    with open('Area.csv', 'r') as f:
+    with open('Groups.csv', 'r') as f:
         try:
-            areaname, groups = f.readline().strip().split(';')
-            stv = STV(areaname, usegroups, reactivationmode)
-            for group in groups.split(','):
+            stv = STV(usegroups, reactivationmode)
+            for group in f.readline().strip().split(','):
                 groupname, seats = group.split(':')
                 stv.add_group(groupname, int(seats))
         except ValueError:
-            raise Exception('Setup Error: Could not decode area')
+            raise Exception('Setup Error: Could not decode Groups')
 
     with open('Candidates.csv', 'r') as f:
         for i, line in enumerate(f, start=1):

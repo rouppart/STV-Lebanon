@@ -1,8 +1,7 @@
 class STV:
     """ Contains the whole voting system and does the counting """
-    def __init__(self, areaname, usegroups=False, reactivationmode=False):
+    def __init__(self, usegroups=False, reactivationmode=False):
         # Static attributes
-        self.areaname = areaname
         self.usegroups = usegroups
         self.reactivationmode = reactivationmode
 
