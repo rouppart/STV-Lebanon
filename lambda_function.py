@@ -27,7 +27,7 @@ def pos_to_json(pos):
 def lambda_handler(event, context):
     try:
         usegroups = event['usegroups']
-        ractivation = event['reactivation']
+        reactivation = event['reactivation']
         groups = event['groups']
         candidates = event['candidates']
         votes = event['votes']
@@ -37,7 +37,7 @@ def lambda_handler(event, context):
     if len(candidates) > CANDIDATE_LIMIT:
         return get_error('Function limited to {} candidates'.format(CANDIDATE_LIMIT))
 
-    stv = STV(True, True)
+    stv = STV(usegroups, reactivation)
     for group in groups:
         stv.add_group(group['name'], group['seats'])
 
