@@ -48,11 +48,11 @@ def lambda_handler(event, context):
         stv.add_voter(vote['voterid'], vote['ballot'])
 
     stvp = STVProgress(stv)
-    result = []
+    loops = []
     for t, pos in stvp.get_tansform_and_position():
-        result.append(pos_to_json(pos))
+        loops.append(pos_to_json(pos))
 
-    return result
+    return {'quota': stv.quota, 'loops': loops}
 
 
 def get_error(msg):
