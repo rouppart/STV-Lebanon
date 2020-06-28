@@ -22,10 +22,10 @@ class Position:
 
         if status.winner is not None:
             self.looptype = self.WIN
-            self.message = 'Win:' + status.winner.name
+            self.message = 'Win: ' + status.winner.name
         elif status.loser is not None:
             self.looptype = self.LOSS
-            self.message = 'Loss:' + status.loser.name
+            self.message = 'Loss: ' + status.loser.name
         elif stv.reductioncount > 0:
             self.looptype = self.REDUCTION
             self.message = 'Reductions: {}'.format(stv.reductioncount)
