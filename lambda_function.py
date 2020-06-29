@@ -11,7 +11,8 @@ def pos_to_json(pos, initquota, winners_quota):
         'loopcount': pos.loopcount,
         'looptype': pos.looptype,
         'message': pos.message,
-        'candidates': {}
+        'candidates': {},
+        'waste': round(sum(pos.waste.values()), 2)
     }
     for status, candlist in [('winner', pos.winners), ('active', pos.active), ('deactivated', pos.deactivated),
                              ('excluded', pos.excluded)]:
