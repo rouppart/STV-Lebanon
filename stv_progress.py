@@ -108,11 +108,11 @@ class STVProgress:
             t = t.nextposition.nexttransform
 
 
-def test_using_shell():
+def test_using_cli():
     try:
-        from shell_interface import setup
+        from cli_interface import setup
     except ImportError:
-        print('Could not import Shell Interface\nExiting')
+        print('Could not import CLI Interface\nExiting')
         return
 
     print('Options:\n'
@@ -147,4 +147,4 @@ def test_using_shell():
 
 
 if __name__ == '__main__':
-    test_using_shell()
+    test_using_cli()

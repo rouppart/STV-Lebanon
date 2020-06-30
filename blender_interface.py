@@ -262,17 +262,17 @@ class STVBlender:
         self.votefractions = list(vfgs.values())
 
 
-def build_from_shell(usegroups, reactivationmode, viewvoter=None):
+def build_from_cli(usegroups, reactivationmode, viewvoter=None):
     try:
-        from shell_interface import setup
+        from cli_interface import setup
     except ImportError:
-        print('Could not import Shell Interface\nExiting')
+        print('Could not import CLI Interface\nExiting')
         return
 
     return STVBlender(setup(usegroups, reactivationmode), viewvoter)
 
 
 if __name__ == '__main__':
-    stvb = build_from_shell(True, True)
+    stvb = build_from_cli(True, True)
     for obj in stvb.buckets + stvb.votebases + stvb.votefractions + stvb.textstrips:
         print(obj)

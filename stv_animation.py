@@ -2,7 +2,7 @@ from math import pi
 import bpy
 import bmesh
 
-from blender_interface import BucketG, VoteBaseG, VoteFractionG, build_from_shell
+from blender_interface import BucketG, VoteBaseG, VoteFractionG, build_from_cli
 
 
 def build_first_mesh(name, width, heightratio, zoffset, materialname):
@@ -226,7 +226,7 @@ def main(usegroups, reactivationmode, viewid):
 
     create_materials()
 
-    stvblender = build_from_shell(usegroups, reactivationmode, viewid)
+    stvblender = build_from_cli(usegroups, reactivationmode, viewid)
     for bucket in stvblender.buckets:
         build_bucket(bucket)
         build_bucket_fill(bucket)
