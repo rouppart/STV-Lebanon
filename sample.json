@@ -57,5 +57,6 @@
     {"voterid": "amal", "ballot": ["nb", "hn", "ta"]},
     {"voterid": "amal2", "ballot": ["nb", "hn", "ta"]},
     {"voterid": "arslanist", "ballot": ["ta", "nb", "hn", "gb", "id"]}
-]
+],
+"viewvoter": "independent"
 }

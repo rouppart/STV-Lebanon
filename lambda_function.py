@@ -1,10 +1,10 @@
 from stv import STV
 from stv_progress import STVProgress
 
-CANDIDATE_LIMIT = 50
+VOTES_LIMIT = 50
 
 
-def pos_to_json(pos, initquota, winners_quota):
+def pos_to_json(pos, initquota, winners_quota, viewvoter):
     j = {
         'round': pos.round,
         'subround': pos.subround,
@@ -12,6 +12,7 @@ def pos_to_json(pos, initquota, winners_quota):
         'looptype': pos.looptype,
         'message': pos.message,
         'candidates': {},
+        'viewballot': None,
         'waste': round(sum(pos.waste.values()), 2)
     }
     for status, candlist in [('winner', pos.winners), ('active', pos.active), ('deactivated', pos.deactivated),
@@ -20,23 +21,30 @@ def pos_to_json(pos, initquota, winners_quota):
             quota = round(winners_quota[cand.code] if status == 'winner' else initquota, 2)
             j['candidates'][cand.code] = {'votes': round(cand.votes, 2), 'status': status, 'quota': quota}
 
+    if viewvoter is not None:
+        j['viewballot'] = []
+        for vf in pos.votefractions.values():
+            if vf.voterid == viewvoter:
+                ballotline = {'ccode': vf.candidatecode, 'fraction': round(vf.fraction, 2), 'status': vf.status[0]}
+                j['viewballot'].append(ballotline)
+
     return j
 
 
 def lambda_handler(event, context):
-    try:
-        usegroups = event['usegroups']
-        reactivation = event['reactivation']
-        groups = event['groups']
-        candidates = event['candidates']
-        votes = event['votes']
-    except KeyError:
-        return get_error('JSON not properly defined')
+    # Preliminary checks
+    usegroups = event['usegroups']
+    reactivation = event['reactivation']
+    groups = event['groups']
+    candidates = event['candidates']
+    votes = event['votes']
+    viewvoter = event.get('viewvoter')
 
-    if len(candidates) > CANDIDATE_LIMIT:
-        return get_error('Function limited to {} candidates'.format(CANDIDATE_LIMIT))
+    if len(votes) > VOTES_LIMIT:
+        return get_error('Function', 'limit is {} votes'.format(VOTES_LIMIT))
 
     stv = STV(usegroups, reactivation)
+
     for group in groups:
         stv.add_group(group['name'], group['seats'])
 
@@ -46,6 +54,8 @@ def lambda_handler(event, context):
     for vote in votes:
         stv.add_voter(vote['voterid'], vote['ballot'])
 
+    if viewvoter not in stv.voters:
+        viewvoter = None
     stvp = STVProgress(stv)
     # Get Quotas
     initquota = stv.quota
@@ -53,7 +63,7 @@ def lambda_handler(event, context):
 
     loops = []
     for t, pos in stvp.get_tansform_and_position():
-        loops.append(pos_to_json(pos, initquota, winners_quota))
+        loops.append(pos_to_json(pos, initquota, winners_quota, viewvoter))
 
     # Create links
     lastroundli = len(loops) - 1
@@ -90,11 +100,11 @@ def lambda_handler(event, context):
             lastsubround = loop['nextSubround']
             lastsubroundli = i
 
-    return {'quota': stv.quota, 'loops': loops}
+    return {'quota': stv.quota, 'loops': loops, 'viewvoter': viewvoter}
 
 
-def get_error(msg):
-    return {'error': msg}
+def get_error(errortype, msg):
+    return {'errorType': errortype, 'errorMessage': msg}
 
 
 def test():
