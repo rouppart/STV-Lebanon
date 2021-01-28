@@ -1,14 +1,185 @@
+from typing import List, Dict, Generator, Final, Optional
+
+
+class Group:
+    def __init__(self, name: str, seats: int):
+        self.name = name
+        self.seats = seats
+        self.seatswon = 0
+
+    @property
+    def is_full(self) -> bool:
+        return self.seatswon >= self.seats
+
+
+class Candidate:
+    def __init__(self, code: str, name: str, group: Group):
+        self.code = code
+        self.name = name
+        self.group = group
+        self.votelinks: List[VoteLink] = []
+
+        # Running Attributes
+        self._votes: float = 0
+        self.dorefreshvotes = True
+        self.wonatquota: float = 0
+        self.doreduction = False
+
+    def __repr__(self):
+        return 'Candidate({}, {})'.format(self.code, self.name)
+
+    @property
+    def votes(self) -> float:
+        """ Cache result to improve performance """
+        if self.dorefreshvotes:
+            self.dorefreshvotes = False
+            self._votes = 0
+            for vl in self.votelinks:
+                self._votes += vl.weight
+        return self._votes
+
+    def reduce(self) -> None:
+        """
+        Now that the candidate has surplus votes,
+        see who from the partial supporters can become full supporters,
+        then reduce the weight taken from all full supporters
+        """
+        self.doreduction = False
+
+        # Create ordered list of partial votelinks from lowest to highest and list of full votelinks
+        partialvls = []
+        fullvls = []
+        for vl in self.votelinks:
+            if vl.status == vl.FULL:
+                fullvls.append(vl)
+            elif vl.status == vl.PARTIAL and vl.weight > 0:
+                partialvls.append(vl)
+        partialvls.sort(key=lambda x: x.weight)
+
+        totalsupporters = len(fullvls) + len(partialvls)
+        partialcount = 0
+        partialweight: float = 0
+        for vl in partialvls + fullvls:
+            threshold = (self.wonatquota - partialweight) / (totalsupporters - partialcount)
+            # Threshold is the weight at which a VoteLink can qualify as FULL and the weight at which FULL support
+            # will be reduced.
+            # As loop progresses, the threshold will increase than stabilize when supporters are able to
+            # become full supporters
+            if vl.status == vl.PARTIAL:
+                if vl.weight < threshold:
+                    # Phase 1. partial supporters who cannot give full support
+                    partialcount += 1
+                    partialweight += vl.weight
+                    # This will increase  the threshold on next iteration
+                else:
+                    # Phase 2. partial supporter can now fully support candidate
+                    vl.status = vl.FULL
+
+            # Reduce full support weight for old and new full supporters
+            if vl.status == vl.FULL:
+                vl.weight = threshold
+                self.dorefreshvotes = True  # Have to recalculate weight
+                vl.voter.doallocate = True
+                vl.voter.dorefreshwaste = True  # Have to recalculate waste
+
+
+class Voter:
+    def __init__(self, uid: str):
+        self.uid = uid
+        self.votelinks: List[VoteLink] = []  # Links to candidate in order of preference
+        self._waste: float = 1
+        self.dorefreshwaste = False
+        self.doallocate = True
+
+    def __repr__(self):
+        return 'Voter({})'.format(self.uid)
+
+    @property
+    def waste(self) -> float:
+        if self.dorefreshwaste:
+            self.dorefreshwaste = False
+            self._waste = 1
+            for vl in self.votelinks:
+                self._waste -= vl.weight
+        return self._waste
+
+    def allocate_votes(self) -> None:
+        self.doallocate = False
+
+        # Collect all fixed weight and reset unfixed weight
+        total: float = 1
+        for vl in self.votelinks:
+            if vl.status in [vl.PARTIAL, vl.FULL]:
+                total -= vl.weight
+            elif vl.weight > 0:
+                vl.weight = 0
+                vl.candidate.dorefreshvotes = True
+
+        # Spread unfixed weight to first Active or Partial votelinks
+        if total > 0.005:  # Due to floating point inaccuracy dont compare to 0
+            for vl in self.votelinks:
+                if vl.status in [vl.ACTIVE, vl.PARTIAL]:
+                    vl.weight += total
+                    total = 0
+                    vl.candidate.dorefreshvotes = True
+                    # New available support to previous winner
+                    if vl.candidate.wonatquota > 0:
+                        vl.candidate.doreduction = True
+                    break
+
+        self._waste = total
+
+
+class VoteLink:
+    EXCLUDED: Final = -2  # Permanent Lost support
+    DEACTIVATED: Final = -1  # Temporary Lost support
+    ACTIVE: Final = 0  # Active support
+    PARTIAL: Final = 1  # Partial support
+    FULL: Final = 2  # Full support
+
+    def __init__(self, voter: Voter, candidate: Candidate):
+        self.voter = voter
+        self.candidate = candidate
+        self.weight: float = 0
+
+        self.voter.votelinks.append(self)
+        self.candidate.votelinks.append(self)
+
+        self.status = self.ACTIVE
+
+    def __repr__(self):
+        return f'VoteLink({self.voter}, {self.candidate}, {self.weight:.3f}, {self.status})'
+
+
+class STVStatus:
+    """ Result of each counting round """
+    # Yield Levels. Used to see level of details
+    INITIAL: Final = -1
+    BEGIN: Final = 0
+    END: Final = 1
+    ROUND: Final = 2
+    SUBROUND: Final = 3
+    LOOP: Final = 4
+
+    def __init__(self, yieldlevel: int = None):
+        self.yieldlevel = yieldlevel  # Tells where in the algorithm the yield happened
+        self.winner: Optional[Candidate] = None
+        self.loser: Optional[Candidate] = None
+        self.excluded_by_group: List[Candidate] = []
+        self.reactivated: Optional[List[Candidate]] = None
+
+
 class STV:
     """ Contains the whole voting system and does the counting """
-    def __init__(self, usegroups=False, reactivationmode=False):
+    def __init__(self, usegroups: bool = False, reactivationmode: bool = False):
         # Static attributes
         self.usegroups = usegroups
         self.reactivationmode = reactivationmode
 
         # Input Attributes
-        self.groups = {}
-        self.candidates = {}
-        self.voters = {}
+        self.groups: Dict[str, Group] = {}
+        self.candidates: Dict[str, Candidate] = {}
+        self.voters: Dict[str, Voter] = {}
 
         # Variable Running Attributes
         self.totalseats = 0
@@ -19,25 +190,25 @@ class STV:
         self.allocationcount = 0
         self.reductioncount = 0
 
-        self.winners = []
-        self.active = []
-        self.deactivated = []
-        self.excluded = []
+        self.winners: List[Candidate] = []
+        self.active: List[Candidate] = []
+        self.deactivated: List[Candidate] = []
+        self.excluded: List[Candidate] = []
 
     # Setup Methods
-    def add_group(self, name, seats):
+    def add_group(self, name: str, seats: int) -> None:
         if name in self.groups:
             raise Exception('Group {} was already added'.format(name))
         self.groups[name] = Group(name, seats)
         self.totalseats += seats
 
-    def add_candidate(self, code, name, groupname):
+    def add_candidate(self, code: str, name: str, groupname: str) -> None:
         if code in self.candidates:
             raise Exception('Candidate {} was already added'.format(code))
         self.candidates[code] = candidate = Candidate(code, name, self.groups[groupname])
         self.active.append(candidate)  # Put all Candidates in the active list
 
-    def add_voter(self, uid, candlist):
+    def add_voter(self, uid: str, candlist: List[str]) -> None:
         if uid in self.voters:
             raise Exception('Voter {} was already added'.format(uid))
         self.voters[uid] = newvoter = Voter(uid)
@@ -53,17 +224,17 @@ class STV:
                 print('Warning: Voter {} voted used an invalid Candidate Code ({}). Ignoring'.format(uid, ccode))
 
     @property
-    def quota(self):
+    def quota(self) -> float:
         return len(self.voters) / self.totalseats
 
     @property
-    def totalwaste(self):
-        return len(self.voters) - sum(c.votes for c in self.active + self.winners)
+    def totalwaste(self) -> float:
+        return float(len(self.voters)) - sum(c.votes for c in self.active + self.winners)
 
-    def _sort_active(self):
+    def _sort_active(self) -> None:
         self.active.sort(key=lambda candidate: candidate.votes, reverse=True)
 
-    def start(self):
+    def start(self) -> Generator:
         """ Advance to next Round. Either there will be a win, a loss or reactivation. Then do heavy counting """
         yield STVStatus(STVStatus.BEGIN)
 
@@ -159,7 +330,12 @@ class STV:
             yield decstatus
 
     @staticmethod
-    def _process_candidate(candidate, fromlist, tolist, new_vl_status, votersdoallocate):
+    def _process_candidate(candidate: Candidate,
+                           fromlist: List[Candidate],
+                           tolist: List[Candidate],
+                           new_vl_status,
+                           votersdoallocate
+                           ) -> None:
         """ Transfer candidate and update its votelinks """
         fromlist.remove(candidate)
         tolist.append(candidate)
@@ -168,7 +344,7 @@ class STV:
             vl.status = new_vl_status
             vl.voter.doallocate = votersdoallocate
 
-    def _reactivate(self, limit=None):
+    def _reactivate(self, limit: Optional[int] = None) -> List[Candidate]:
         """ Reactivates deactivated Candidates """
         reactivated = []
         for c in self.deactivated[::-1]:
@@ -180,171 +356,3 @@ class STV:
                 break
 
         return reactivated
-
-
-class STVStatus:
-    """ Result of each counting round """
-    # Yield Levels. Used to see level of details
-    INITIAL = -1
-    BEGIN = 0
-    END = 1
-    ROUND = 2
-    SUBROUND = 3
-    LOOP = 4
-
-    def __init__(self, yieldlevel=None):
-        self.yieldlevel = yieldlevel  # Tells where in the algorithm the yield happened
-        self.winner = None
-        self.loser = None
-        self.excluded_by_group = []
-        self.reactivated = None
-
-
-class Group:
-    def __init__(self, name, seats):
-        self.name = name
-        self.seats = seats
-        self.seatswon = 0
-
-    @property
-    def is_full(self):
-        return self.seatswon >= self.seats
-
-
-class Candidate:
-    def __init__(self, code, name, group):
-        self.code = code
-        self.name = name
-        self.group = group
-        self.votelinks = []
-
-        # Running Attributes
-        self._votes = 0
-        self.dorefreshvotes = True
-        self.wonatquota = 0
-        self.doreduction = False
-
-    def __repr__(self):
-        return 'Candidate({}, {})'.format(self.code, self.name)
-
-    @property
-    def votes(self):
-        """ Cache result to improve performance """
-        if self.dorefreshvotes:
-            self.dorefreshvotes = False
-            self._votes = 0
-            for vl in self.votelinks:
-                self._votes += vl.weight
-        return self._votes
-
-    def reduce(self):
-        """
-        Now that the candidate has surplus votes,
-        see who from the partial supporters can become full supporters,
-        then reduce the weight taken from all full supporters
-        """
-        self.doreduction = False
-
-        # Create ordered list of partial votelinks from lowest to highest and list of full votelinks
-        partialvls = []
-        fullvls = []
-        for vl in self.votelinks:
-            if vl.status == vl.FULL:
-                fullvls.append(vl)
-            elif vl.status == vl.PARTIAL and vl.weight > 0:
-                partialvls.append(vl)
-        partialvls.sort(key=lambda x: x.weight)
-
-        totalsupporters = len(fullvls) + len(partialvls)
-        partialcount = 0
-        partialweight = 0
-        for vl in partialvls + fullvls:
-            threshold = (self.wonatquota - partialweight) / (totalsupporters - partialcount)
-            # Threshold is the weight at which a VoteLink can qualify as FULL and the weight at which FULL support
-            # will be reduced.
-            # As loop progresses, the threshold will increase than stabilize when supporters are able to
-            # become full supporters
-            if vl.status == vl.PARTIAL:
-                if vl.weight < threshold:
-                    # Phase 1. partial supporters who cannot give full support
-                    partialcount += 1
-                    partialweight += vl.weight
-                    # This will increase  the threshold on next iteration
-                else:
-                    # Phase 2. partial supporter can now fully support candidate
-                    vl.status = vl.FULL
-
-            # Reduce full support weight for old and new full supporters
-            if vl.status == vl.FULL:
-                vl.weight = threshold
-                self.dorefreshvotes = True  # Have to recalculate weight
-                vl.voter.doallocate = True
-                vl.voter.dorefreshwaste = True  # Have to recalculate waste
-
-
-class Voter:
-    def __init__(self, uid):
-        self.uid = uid
-        self.votelinks = []  # Links to candidate in order of preference
-        self._waste = 1
-        self.dorefreshwaste = False
-        self.doallocate = True
-
-    def __repr__(self):
-        return 'Voter({})'.format(self.uid)
-
-    @property
-    def waste(self):
-        if self.dorefreshwaste:
-            self.dorefreshwaste = False
-            self._waste = 1
-            for vl in self.votelinks:
-                self._waste -= vl.weight
-        return self._waste
-
-    def allocate_votes(self):
-        self.doallocate = False
-
-        # Collect all fixed weight and reset unfixed weight
-        total = 1
-        for vl in self.votelinks:
-            if vl.status in [vl.PARTIAL, vl.FULL]:
-                total -= vl.weight
-            elif vl.weight > 0:
-                vl.weight = 0
-                vl.candidate.dorefreshvotes = True
-
-        # Spread unfixed weight to first Active or Partial votelinks
-        if total > 0.005:  # Due to floating point inaccuracy dont compare to 0
-            for vl in self.votelinks:
-                if vl.status in [vl.ACTIVE, vl.PARTIAL]:
-                    vl.weight += total
-                    total = 0
-                    vl.candidate.dorefreshvotes = True
-                    # New available support to previous winner
-                    if vl.candidate.wonatquota > 0:
-                        vl.candidate.doreduction = True
-                    break
-
-        self._waste = total
-
-
-class VoteLink:
-    EXCLUDED = -2  # Permanent Lost support
-    DEACTIVATED = -1  # Temporary Lost support
-    ACTIVE = 0  # Active support
-    PARTIAL = 1  # Partial support
-    FULL = 2  # Full support
-
-    def __init__(self, voter, candidate):
-        self.voter = voter
-        self.candidate = candidate
-        self.weight = 0
-
-        self.voter.votelinks.append(self)
-        self.candidate.votelinks.append(self)
-
-        self.status = self.ACTIVE
-
-    def __repr__(self):
-        return 'VoteLink({}, {}, {:.3f}, {})'.format(self.voter, self.candidate, self.weight, self.status)

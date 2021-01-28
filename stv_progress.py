@@ -1,4 +1,6 @@
+from typing import List, Optional, Generator
 from collections import namedtuple
+from stv import STV
 
 Candidate = namedtuple('Candidate', ['code', 'votes'])
 VoteFraction = namedtuple('VoteFraction', ['voterid', 'fraction', 'candidatecode', 'status'])
@@ -12,7 +14,7 @@ class Position:
     LOSS = 3
     WIN = 4
 
-    def __init__(self, stv, status, previous_position):
+    def __init__(self, stv: STV, status, previous_position):
         def tupelize_candidate_list(candlist):
             return [Candidate(c.code, c.votes) for c in candlist]
 
@@ -56,38 +58,37 @@ class Position:
                                 vl.PARTIAL: 'Partial', vl.FULL: 'Full'}[vl.status]
                 self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vlstatuscode)
 
-        self.nexttransform = None
+        self.nexttransform: Optional[Transform] = None
 
         if previous_position is not None:
             self.add_previous(previous_position)
 
     @property
-    def hasdecision(self):
+    def hasdecision(self) -> bool:
         return self.looptype >= self.LOSS
 
-    def add_previous(self, previous):
-        previous.nexttransform = t = Transform()
-        t.nextposition = self
+    def add_previous(self, previous: 'Position') -> None:
+        previous.nexttransform = t = Transform(self)
 
         for k, nvf in self.votefractions.items():
             t.add_difference(previous.votefractions[k], nvf)
 
 
 class Transform:
-    def __init__(self):
-        self.nextposition = None
-        self.returnvfs = []
-        self.sendvfs = []
+    def __init__(self, nextposition: Position):
+        self.nextposition = nextposition
+        self.returnvfs: List[VoteFraction] = []
+        self.sendvfs: List[VoteFraction] = []
 
-    def add_difference(self, previousvl, nextvf):
-        weightdiff = nextvf.fraction - previousvl.fraction
+    def add_difference(self, previousvf: VoteFraction, nextvf: VoteFraction) -> None:
+        weightdiff = nextvf.fraction - previousvf.fraction
         if weightdiff != 0:
             vflist = self.sendvfs if weightdiff > 0 else self.returnvfs
             vflist.append(VoteFraction(nextvf.voterid, abs(weightdiff), nextvf.candidatecode, nextvf.status))
 
 
 class STVProgress:
-    def __init__(self, stv):
+    def __init__(self, stv: STV):
         """ receives a fresh stv instance and creates all positions and transforms """
         self.startpos = None
         currentpos = None
@@ -100,7 +101,9 @@ class STVProgress:
 
                 currentpos = newpos
 
-    def get_tansform_and_position(self):
+    def get_tansform_and_position(self) -> Generator:
+        if self.startpos is None:
+            raise Exception('STV Progress could not initialize')
         yield None, self.startpos
         t = self.startpos.nexttransform
         while t is not None:

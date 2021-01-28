@@ -1,7 +1,7 @@
 from stv import STV, STVStatus
 
 
-def main():
+def main() -> None:
     print('Options:\n'
           '"r" to view the count by round, "s" by subround or "l" by loop\n'
           '"g" to use group quotas\n'
@@ -64,7 +64,7 @@ def main():
                 print('Waste Percentage:', formatratio(stv.totalwaste / len(stv.voters)))
 
 
-def setup(usegroups, reactivationmode):
+def setup(usegroups: bool, reactivationmode: bool) -> STV:
     """ Import from local files, create and return STV instance """
 
     # Fill Objects
@@ -100,7 +100,7 @@ def setup(usegroups, reactivationmode):
     return stv
 
 
-def print_lists(stv, voterid):
+def print_lists(stv: STV, voterid: str) -> None:
     """ Prints candidate list and optionally, voter's ballot """
     statcands = [('W', stv.winners), ('A', stv.active), ('D', stv.deactivated[::-1]), ('E', stv.excluded[::-1])]
 
