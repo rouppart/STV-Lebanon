@@ -1,6 +1,6 @@
 from typing import List, Optional, Generator
 from collections import namedtuple
-from stv import STV
+from .stv import STV
 
 Candidate = namedtuple('Candidate', ['code', 'votes'])
 VoteFraction = namedtuple('VoteFraction', ['voterid', 'fraction', 'candidatecode', 'status'])
@@ -103,51 +103,9 @@ class STVProgress:
 
     def get_tansform_and_position(self) -> Generator:
         if self.startpos is None:
-            raise Exception('STV Progress could not initialize')
+            raise Exception("STV Progress could not initialize")
         yield None, self.startpos
         t = self.startpos.nexttransform
         while t is not None:
             yield t, t.nextposition
             t = t.nextposition.nexttransform
-
-
-def test_using_cli():
-    try:
-        from cli_interface import setup
-    except ImportError:
-        print('Could not import CLI Interface\nExiting')
-        return
-
-    print('Options:\n'
-          '"g" to use group quotas\n'
-          '"n" for no reactivation')
-    viewmode = input('Type any number of options: ')
-
-    stv = setup('g' in viewmode, 'n' not in viewmode)
-    stvp = STVProgress(stv)
-    candidates = stv.candidates
-
-    for t, pos in stvp.get_tansform_and_position():
-        print('\n\nRound: {}.{}.{}'.format(pos.round, pos.subround, pos.loopcount))
-        print(pos.message)
-        print()
-
-        if t is not None:
-            vlformat = '{0:<12}{3} {1:.2f} {3} {2}'
-            if t.returnvfs:
-                print('Return Fractions')
-                for vf in t.returnvfs:
-                    print(vlformat.format(vf.voterid, vf.fraction, candidates[vf.candidatecode].name, '<'))
-            if t.sendvfs:
-                print('Send Fractions')
-                for vf in t.sendvfs:
-                    print(vlformat.format(vf.voterid, vf.fraction, candidates[vf.candidatecode].name, '>'))
-
-        print('\nCandidates:')
-        for candlist, status in [(pos.winners, 'W'), (pos.active, 'A'), (pos.deactivated, 'D'), (pos.excluded, 'E')]:
-            for cand in candlist:
-                print('{:<20}{}  {:,.2f}'.format(candidates[cand.code].name, status, cand.votes))
-
-
-if __name__ == '__main__':
-    test_using_cli()

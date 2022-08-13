@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "stv-lebanon"
+version = "0.99.0"
+description = "Library for the Single Transferrable Vote version for Lebanon"
+authors = ["Robert Trad <roberttrad@gmail.com>"]
+license = "GNU GPLv3"
+
+[tool.poetry.dependencies]
+python = ">=3.7"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.scripts]
+stvlebanon = 'stv_lebanon.cli_interface:main'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

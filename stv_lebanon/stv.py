@@ -1,6 +1,10 @@
 from typing import List, Dict, Generator, Final, Optional
 
 
+class STVSetupException(Exception):
+    pass
+
+
 class Group:
     def __init__(self, name: str, seats: int):
         self.name = name
@@ -26,7 +30,7 @@ class Candidate:
         self.doreduction = False
 
     def __repr__(self):
-        return 'Candidate({}, {})'.format(self.code, self.name)
+        return f"Candidate({self.code}, {self.name})"
 
     @property
     def votes(self) -> float:
@@ -88,29 +92,27 @@ class Voter:
         self.uid = uid
         self.votelinks: List[VoteLink] = []  # Links to candidate in order of preference
         self._waste: float = 1
-        self.dorefreshwaste = False
+        self.dorefreshwaste = False  # Used to trigger recalculation of waste. Reduces computation
         self.doallocate = True
 
     def __repr__(self):
-        return 'Voter({})'.format(self.uid)
+        return f"Voter({self.uid})"
 
     @property
     def waste(self) -> float:
         if self.dorefreshwaste:
             self.dorefreshwaste = False
-            self._waste = 1
-            for vl in self.votelinks:
-                self._waste -= vl.weight
+            self._waste = 1 - sum(vl.weight for vl in self.votelinks)
         return self._waste
 
     def allocate_votes(self) -> None:
         self.doallocate = False
 
         # Collect all fixed weight and reset unfixed weight
-        total: float = 1
+        total = 1.0  # Total to allocate
         for vl in self.votelinks:
             if vl.status in [vl.PARTIAL, vl.FULL]:
-                total -= vl.weight
+                total -= vl.weight  # Removing fixed weight
             elif vl.weight > 0:
                 vl.weight = 0
                 vl.candidate.dorefreshvotes = True
@@ -148,7 +150,7 @@ class VoteLink:
         self.status = self.ACTIVE
 
     def __repr__(self):
-        return f'VoteLink({self.voter}, {self.candidate}, {self.weight:.3f}, {self.status})'
+        return f"VoteLink({self.voter}, {self.candidate}, {self.weight:.3f}, {self.status})"
 
 
 class STVStatus:
@@ -198,19 +200,25 @@ class STV:
     # Setup Methods
     def add_group(self, name: str, seats: int) -> None:
         if name in self.groups:
-            raise Exception('Group {} was already added'.format(name))
+            raise STVSetupException(f"Group {name} was already added")
         self.groups[name] = Group(name, seats)
         self.totalseats += seats
 
     def add_candidate(self, code: str, name: str, groupname: str) -> None:
         if code in self.candidates:
-            raise Exception('Candidate {} was already added'.format(code))
-        self.candidates[code] = candidate = Candidate(code, name, self.groups[groupname])
+            raise STVSetupException(f"Candidate {code} was already added")
+        try:
+            group = self.groups[groupname]
+        except KeyError:
+            raise STVSetupException(f"Cannot find Group with name: {groupname}")
+        self.candidates[code] = candidate = Candidate(code, name, group)
         self.active.append(candidate)  # Put all Candidates in the active list
 
     def add_voter(self, uid: str, candlist: List[str]) -> None:
+        if not uid:
+            raise STVSetupException("Cannot add Voter with empty code")
         if uid in self.voters:
-            raise Exception('Voter {} was already added'.format(uid))
+            raise STVSetupException(f"Voter {uid} was already added")
         self.voters[uid] = newvoter = Voter(uid)
         addedcandidates = set()  # Used to check duplicate candidate code
         for ccode in candlist:
@@ -219,9 +227,9 @@ class STV:
                     VoteLink(newvoter, self.candidates[ccode])
                     addedcandidates.add(ccode)
                 else:
-                    print('Warning: Voter {} already specified candidate ({}). Ignoring'.format(uid, ccode))
+                    print(f"Warning: Voter {uid} already specified candidate ({ccode}). Ignoring")
             except KeyError:
-                print('Warning: Voter {} voted used an invalid Candidate Code ({}). Ignoring'.format(uid, ccode))
+                print(f"Warning: Voter {uid} voted used an invalid Candidate Code ({ccode}). Ignoring")
 
     @property
     def quota(self) -> float:

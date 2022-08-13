@@ -1,8 +1,8 @@
 from typing import Any, List, Dict, Union, Optional
 from collections import namedtuple
 from math import sqrt, ceil
-from stv import STV
-from stv_progress import STVProgress
+from stv_lebanon.stv import STV
+from stv_lebanon.stv_progress import STVProgress
 
 
 Location = namedtuple('Location', ['x', 'y', 'z'])
@@ -13,7 +13,7 @@ def add_location(loc, x=0.0, y=0.0, z=0.0):
     return Location(loc.x + x, loc.y + y, loc.z + z)
 
 
-def get_last_frame(adata: Dict[float, Any], maxf, _=None) -> float:
+def get_last_frame(adata: Dict[float, Any], maxf) -> float:
     if maxf is None:
         return max(adata.keys())
     else:
@@ -21,14 +21,15 @@ def get_last_frame(adata: Dict[float, Any], maxf, _=None) -> float:
 
 
 class BucketG:
-    def __init__(self,
-                 candidatecode: str,
-                 candidatename: str,
-                 width: float,
-                 heightratio: float,
-                 votefillheightratio: float,
-                 border: float
-                 ):
+    def __init__(
+            self,
+            candidatecode: str,
+            candidatename: str,
+            width: float,
+            heightratio: float,
+            votefillheightratio: float,
+            border: float
+    ):
         self.candidatecode = candidatecode
         self.candidatename = candidatename
         self.width = width
@@ -82,14 +83,15 @@ class VoteBaseG:
 
 
 class VoteFractionG:
-    def __init__(self,
-                 voterid: str,
-                 bucket: BucketG,
-                 vbase: VoteBaseG,
-                 width: float,
-                 heightratio: float,
-                 initlocation: Location
-                 ):
+    def __init__(
+            self,
+            voterid: str,
+            bucket: BucketG,
+            vbase: VoteBaseG,
+            width: float,
+            heightratio: float,
+            initlocation: Location
+    ):
         self.voterid = voterid
         self.bucket = bucket
         self.candidatecode = bucket.candidatecode if bucket is not None else None
@@ -285,14 +287,14 @@ class STVBlender:
         self.votefractions = list(vfgs.values())
 
 
-def build_from_cli(usegroups: bool, reactivationmode: bool, viewvoter=None) -> STVBlender:
-    from cli_interface import setup
+def build_from_cli(usegroups: bool, reactivationmode: bool, viewvoter=None, load_samples=False) -> STVBlender:
+    from stv_lebanon.cli_interface import setup
 
-    return STVBlender(setup(usegroups, reactivationmode), viewvoter)
+    return STVBlender(setup(usegroups, reactivationmode, load_samples), viewvoter)
 
 
 if __name__ == '__main__':
-    stvb = build_from_cli(True, True)
+    stvb = build_from_cli(True, True, None, True)
     obj: Any
     for obj in stvb.buckets:
         print(obj)

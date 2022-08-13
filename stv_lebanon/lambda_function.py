@@ -1,7 +1,8 @@
-from stv import STV
-from stv_progress import STVProgress
+from os import getenv
+from .stv import STV
+from .stv_progress import STVProgress
 
-VOTES_LIMIT = 50
+VOTES_LIMIT = int(getenv('VOTES_LIMIT', 50))
 
 
 def pos_to_json(pos, initquota, winners_quota, viewvoter):
@@ -105,14 +106,3 @@ def lambda_handler(event, context):
 
 def get_error(errortype, msg):
     return {'errorType': errortype, 'errorMessage': msg}
-
-
-def test():
-    import json
-    with open('sample.json') as f:
-        res = lambda_handler(json.load(f), None)
-    print(json.dumps(res, indent=2))
-
-
-if __name__ == '__main__':
-    test()
