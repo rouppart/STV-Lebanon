@@ -24,7 +24,7 @@ def main() -> None:
     print("Reactivation:", reactivation)
     print("View Level:", {STVStatus.END: "Result", STVStatus.ROUND: "Round", STVStatus.SUBROUND: "Subround",
                           STVStatus.LOOP: "Loop"}[viewlevel])
-    print("Watching:", viewvoter)
+    print("Watching:", viewvoter or "<None>")
 
     stv = setup(use_groups, reactivation, load_samples)
 
@@ -90,16 +90,17 @@ def setup(usegroups: bool, reactivationmode: bool, load_samples: bool = False) -
             print("Using sample:", filename)
         return filename
 
+    stv = STV(usegroups, reactivationmode)
     try:
         # Fill Objects
         with open(local_or_sample('Groups.csv'), 'r') as f:
-            try:
-                stv = STV(usegroups, reactivationmode)
-                for group in f.readline().strip().split(','):
-                    groupname, seats = group.split(':')
+            for i, line in enumerate(f, start=1):
+                line = line.strip()  # Skip empty lines
+                try:
+                    groupname, seats = line.split(',')
                     stv.add_group(groupname, int(seats))
-            except ValueError:
-                raise Exception("Setup Error: Could not decode Groups")
+                except ValueError:
+                    raise STVSetupException(f"Could not decode group at line {i}")
 
         with open(local_or_sample('Candidates.csv'), 'r') as f:
             for i, line in enumerate(f, start=1):
@@ -109,12 +110,12 @@ def setup(usegroups: bool, reactivationmode: bool, load_samples: bool = False) -
                         uid, name, groupname = line.split(',')
                         stv.add_candidate(uid, name, groupname)
                     except ValueError:
-                        print("Setup Warning: Could not decode candidate at line", i)
+                        raise STVSetupException(f"Could not decode candidate at line {i}")
 
         with open(local_or_sample('Votes.csv'), 'r') as f:
             for i, line in enumerate(f, start=1):
                 line = line.strip()
-                if line:
+                if line:  # Skip empty lines
                     try:
                         uid, *ballot = line.split(',')
                         stv.add_voter(uid, ballot)

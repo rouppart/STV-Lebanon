@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "stv-lebanon"
-version = "0.99.0"
+version = "0.99.2"
 description = "Library for the Single Transferrable Vote version for Lebanon"
 authors = ["Robert Trad <roberttrad@gmail.com>"]
 license = "GNU GPLv3"
