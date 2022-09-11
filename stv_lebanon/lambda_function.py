@@ -1,11 +1,13 @@
+from typing import Optional
 from os import getenv
+
 from .stv import STV
-from .stv_progress import STVProgress
+from .stv_progress import STVProgress, Position
 
 VOTES_LIMIT = int(getenv('VOTES_LIMIT', 50))
 
 
-def pos_to_json(pos, initquota, winners_quota, viewvoter):
+def pos_to_json(pos: Position, initquota: float, winners_quota: dict, viewvoter: Optional[str]):
     j = {
         'round': pos.round,
         'subround': pos.subround,

@@ -24,23 +24,23 @@ class Position:
 
         if status.winner is not None:
             self.looptype = self.WIN
-            self.message = 'Win: ' + status.winner.name
+            self.message = f"Win: {status.winner.name}"
         elif status.loser is not None:
             self.looptype = self.LOSS
-            self.message = 'Loss: ' + status.loser.name
+            self.message = f"Loss: {status.loser.name}"
         elif stv.reductioncount > 0:
             self.looptype = self.REDUCTION
-            self.message = 'Reductions: {}'.format(stv.reductioncount)
+            self.message = f"Reductions: {stv.reductioncount}"
         elif stv.allocationcount > 0:
             self.looptype = self.ALLOCATION
-            self.message = 'Allocations: {}'.format(stv.allocationcount)
+            self.message = f"Allocations: {stv.allocationcount}"
         else:
             self.looptype = self.UNKNOWN
-            self.message = 'Beginning'
+            self.message = "Beginning"
 
         self.excluded_group = status.excluded_by_group[0].group.name if status.excluded_by_group else None
         if self.excluded_group:
-            self.message += '\nExclusion of group: ' + self.excluded_group
+            self.message += f"\nExclusion of group: {self.excluded_group}"
 
         self.winners = tupelize_candidate_list(stv.winners)
         self.active = tupelize_candidate_list(stv.active)
@@ -54,8 +54,8 @@ class Position:
             self.waste[vid] = voter.waste
             for vl in voter.votelinks:
                 ccode = vl.candidate.code
-                vlstatuscode = {vl.EXCLUDED: 'Excluded', vl.DEACTIVATED: 'Deactivated', vl.ACTIVE: 'Active',
-                                vl.PARTIAL: 'Partial', vl.FULL: 'Full'}[vl.status]
+                vlstatuscode = {vl.EXCLUDED: "Excluded", vl.DEACTIVATED: "Deactivated", vl.ACTIVE: "Active",
+                                vl.PARTIAL: "Partial", vl.FULL: "Full"}[vl.status]
                 self.votefractions[(vid, ccode)] = VoteFraction(vid, vl.weight, ccode, vlstatuscode)
 
         self.nexttransform: Optional[Transform] = None
